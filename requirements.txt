@@ -4,4 +4,4 @@ numpy==1.24.3
 ta==0.10.2
 requests==2.31.0
 flask==2.3.3
-iq-option-api @ git+https://github.com/n1nj4z33/iq-option-api.git
+iqoptionapi @ git+https://github.com/Lu-Yi-Hsun/iqoptionapi.git
