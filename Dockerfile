@@ -3,9 +3,6 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y git libgomp1
 
-# Instala git para permitir instalar desde repositorios
-RUN apt-get update && apt-get install -y git
-
 COPY . /app
 
 RUN pip install --upgrade pip
