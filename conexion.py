@@ -1,129 +1,192 @@
-import requests
+# ============================================
+# conexion.py (VERSIÓN COMPATIBLE CON API)
+# ============================================
+from __future__ import annotations
+import sys
 import json
 import time
-import random
-import logging
+import os
+from typing import Optional
+from iqoptionapi.stable_api import IQ_Option
 
-def _connect(email, password):
-    """Conexión simple a IQ Option - Versión Demo"""
+
+class IQOptionLoginError(Exception):
+    pass
+
+
+def _connect(email: str, password: str, retries: int = 3, backoff: float = 2.0) -> IQ_Option:
+    """Conecta a IQ Option con reintentos"""
+    iq = IQ_Option(email, password)
     
-    class IQOptionSimple:
-        def __init__(self, email, password):
-            self.email = email
-            self.password = password
-            self.logged_in = False
-            self.balance_type = 'PRACTICE'
-            self.demo_balance = 10000.0
-            print(f"🔐 Conectando como: {self.email}")
-            
-        def login(self):
-            """Simular login exitoso"""
-            time.sleep(1)
-            self.logged_in = True
-            print("✅ Login exitoso")
-            return True
-        
-        def change_balance(self, balance_type):
-            """Cambiar tipo de balance"""
-            self.balance_type = balance_type
-            print(f"💰 Cambiando a cuenta: {balance_type}")
-            return True
-        
-        def get_balance(self):
-            """Obtener balance"""
-            balance = self.demo_balance if self.balance_type == 'PRACTICE' else 0.0
-            print(f"📊 Balance {self.balance_type}: ${balance}")
-            return balance
-            
-        def get_balances(self):
-            """Obtener balances"""
-            return {
-                'msg': [
-                    {
-                        'id': 1,
-                        'type': 1,
-                        'amount': 0,
-                        'currency': 'USD',
-                        'type_string': 'REAL'
-                    },
-                    {
-                        'id': 2, 
-                        'type': 4,
-                        'amount': self.demo_balance,
-                        'currency': 'USD',
-                        'type_string': 'PRACTICE'
-                    }
-                ]
-            }
-        
-        def buy(self, amount, asset, direction, expiration):
-            """Ejecutar operación DEMO"""
-            print(f"💰 EJECUTANDO {direction.upper()} por ${amount} en {asset}")
-            
-            # Simular resultado (70% win rate para demo)
-            trade_id = f"demo_trade_{int(time.time())}_{random.randint(1000,9999)}"
-            
-            # Actualizar balance demo
-            if random.random() > 0.3:  # 70% win rate
-                win_amount = amount * 0.8  # 80% payout
-                self.demo_balance += win_amount
-                print(f"✅ WIN: +${win_amount:.2f}")
+    last_reason = ""
+    for i in range(retries + 1):
+        try:
+            # Intenta conectar
+            check, reason = iq.connect()
+            if check:
+                # Verificar que realmente está conectado
+                time.sleep(1)
+                try:
+                    # Test de conexión simple
+                    iq.get_balance()
+                    return iq
+                except Exception as e:
+                    last_reason = f"Conectado pero no pudo obtener balance: {e}"
+                    if i < retries:
+                        time.sleep(backoff * (i + 1))
+                        continue
             else:
-                self.demo_balance -= amount
-                print(f"❌ LOSS: -${amount:.2f}")
-                
-            print(f"📊 Nuevo balance: ${self.demo_balance:.2f}")
-            return True, trade_id
-            
-        def check_win_v3(self, trade_id):
-            """Verificar resultado - Versión simple"""
-            # En esta versión demo, el resultado ya se aplicó en buy()
-            # Retornar un valor positivo para indicar éxito
-            return 0.8  # 80% payout
-            
-        def get_profile_ansyc(self):
-            """Obtener perfil demo"""
-            return {
-                "name": self.email.split("@")[0],
-                "username": self.email.split("@")[0],
-                "user_id": random.randint(100000, 999999),
-                "currency": "USD",
-                "currency_char": "$"
+                last_reason = reason or "Login failed"
+        except Exception as e:
+            last_reason = f"Error de conexión: {e}"
+        
+        if i < retries:
+            time.sleep(backoff * (i + 1))
+    
+    raise IQOptionLoginError(last_reason)
+
+
+def get_real_account_data(email: str, password: str) -> dict:
+    """
+    Conecta a IQ Option en REAL y devuelve datos reales
+    Versión simplificada y compatible
+    """
+    iq = None
+    try:
+        # Conectar
+        iq = _connect(email, password)
+        
+        # Cambiar a cuenta REAL
+        try:
+            iq.change_balance('REAL')
+            time.sleep(1)
+        except Exception as e:
+            print(f"[DEBUG] Advertencia al cambiar a REAL: {e}", file=sys.stderr)
+
+        # Username por defecto
+        username = email.split("@")[0]
+        user_id = None
+        currency = "USD"
+
+        # Balance REAL
+        real_balance = 0.0
+        try:
+            real_balance = float(iq.get_balance())
+        except Exception as e:
+            print(f"[DEBUG] Error obteniendo balance real: {e}", file=sys.stderr)
+
+        # Balance de PRÁCTICA
+        practice_balance = None
+        try:
+            iq.change_balance('PRACTICE')
+            time.sleep(1)
+            practice_balance = float(iq.get_balance())
+            # Volver a REAL
+            iq.change_balance('REAL')
+            time.sleep(0.5)
+        except Exception as e:
+            print(f"[DEBUG] Error obteniendo balance práctica: {e}", file=sys.stderr)
+
+        # IDs de balance (opcional)
+        real_id = None
+        practice_id = None
+        try:
+            balances = iq.get_balances()
+            if balances:
+                for b in balances:
+                    if isinstance(b, dict):
+                        t_str = (b.get("type_string") or "").upper()
+                        t = b.get("type")
+                        bal_id = b.get("id") or b.get("balance_id")
+                        
+                        if t_str == "REAL" or t == 1:
+                            real_id = bal_id
+                        if t_str == "PRACTICE" or t == 4:
+                            practice_id = bal_id
+        except Exception as e:
+            print(f"[DEBUG] Error obteniendo IDs: {e}", file=sys.stderr)
+
+        return {
+            "success": True,
+            "data": {
+                "user": {
+                    "username": username,
+                    "email": email,
+                    "userId": user_id
+                },
+                "real": {
+                    "balance": real_balance,
+                    "accountId": real_id,
+                    "currency": currency
+                },
+                "practice": {
+                    "balance": practice_balance,
+                    "accountId": practice_id,
+                    "currency": currency
+                }
             }
-            
-        def get_candles(self, asset, interval, count, timestamp):
-            """Obtener velas demo"""
-            # Generar velas demo aleatorias
-            candles = []
-            base_price = 1.1000
-            
-            for i in range(count):
-                open_price = base_price + random.uniform(-0.0020, 0.0020)
-                close_price = open_price + random.uniform(-0.0010, 0.0010)
-                high_price = max(open_price, close_price) + random.uniform(0, 0.0005)
-                low_price = min(open_price, close_price) - random.uniform(0, 0.0005)
-                
-                candles.append({
-                    'open': open_price,
-                    'close': close_price,
-                    'min': low_price,
-                    'max': high_price,
-                    'volume': random.randint(1000, 5000),
-                    'from': timestamp - (count - i) * interval,
-                    'to': timestamp - (count - i - 1) * interval
-                })
-            
-            return candles
+        }
+    except IQOptionLoginError as e:
+        return {
+            "success": False,
+            "error": f"Error de login: {str(e)}"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Error inesperado: {str(e)}"
+        }
+    finally:
+        if iq:
+            try:
+                iq.api.close()
+            except Exception:
+                pass
 
-    # Crear y retornar instancia
-    iq = IQOptionSimple(email, password)
-    if iq.login():
-        return iq
-    else:
-        raise Exception("Error de conexión a IQ Option")
 
-# Para testing
+# ---------------------------
+# Modo CLI
+# ---------------------------
 if __name__ == "__main__":
-    iq = _connect("demo@demo.com", "password")
-    print("✅ Conexión demo exitosa")
-    print(f"💰 Balance: ${iq.get_balance()}")
+    """
+    Lee JSON desde stdin y devuelve resultado a stdout
+    """
+    if sys.platform == 'win32':
+        import locale
+        sys.stdin.reconfigure(encoding='utf-8')
+        sys.stdout.reconfigure(encoding='utf-8')
+    
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+            
+        try:
+            payload = json.loads(line)
+            email = payload.get("email")
+            password = payload.get("password")
+
+            if not email or not password:
+                result = {
+                    "success": False,
+                    "error": "Email y password son requeridos"
+                }
+            else:
+                print(f"[DEBUG] Intentando conectar con: {email}", file=sys.stderr)
+                result = get_real_account_data(email, password)
+                print(f"[DEBUG] Resultado: {result.get('success')}", file=sys.stderr)
+            
+            print(json.dumps(result), flush=True)
+            
+        except json.JSONDecodeError as e:
+            result = {
+                "success": False,
+                "error": f"JSON inválido: {str(e)}"
+            }
+            print(json.dumps(result), flush=True)
+        except Exception as e:
+            result = {
+                "success": False,
+                "error": f"Error: {str(e)}"
+            }
+            print(json.dumps(result), flush=True)
