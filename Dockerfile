@@ -5,7 +5,7 @@ FROM python:3.10-slim
 WORKDIR /app
 
 # Copia los archivos del subdirectorio Dashboard al directorio de trabajo del contenedor
-COPY ./app
+COPY . .
 
 # Instala las dependencias de Python
 RUN pip install --upgrade pip
