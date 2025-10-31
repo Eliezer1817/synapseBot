@@ -5,3 +5,4 @@ ta==0.10.2
 requests==2.31.0
 flask==2.3.3
 iqoptionapi @ git+https://github.com/Lu-Yi-Hsun/iqoptionapi.git
+
