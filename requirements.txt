@@ -3,5 +3,7 @@ pandas==1.5.3
 numpy==1.26.0
 requests==2.28.2
 flask==2.2.5
+iqoptionapi @ git+https://github.com/Lu-Yi-Hsun/iqoptionapi.git
+
 
 
