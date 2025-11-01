@@ -1110,29 +1110,8 @@
                     restoreDashboard(data.user_data);
                     console.log('✅ Sesión restaurada');
                     
-                    // Restaurar bot si estaba activo
-                    const botConfig = localStorage.getItem('bot_config');
-                    if (botConfig) {
-                        try {
-                            const config = JSON.parse(botConfig);
-                            // Solo restaurar si fue hace menos de 5 minutos
-                            if (Date.now() - config.timestamp < 300000) {
-                                setTimeout(() => {
-                                    if (confirm('¿Deseas reanudar el bot automático que estaba activo?')) {
-                                        document.getElementById('accountMode').value = config.modo;
-                                        document.getElementById('intervalMinutes').value = config.intervalo / 60000;
-                                        iniciarBotAutomatico();
-                                    } else {
-                                        localStorage.removeItem('bot_config');
-                                    }
-                                }, 1000);
-                            } else {
-                                localStorage.removeItem('bot_config');
-                            }
-                        } catch (e) {
-                            console.error('Error restaurando bot:', e);
-                        }
-                    }
+                    // 🔥 NUEVO: Restaurar bot automáticamente sin confirmación
+                    restaurarBotAutomatico();
                 } else {
                     clearSessionToken();
                     showLoginPanel();
@@ -1144,6 +1123,99 @@
                 showLoginPanel();
             });
         }
+
+        // 🔥 NUEVA FUNCIÓN: Restaurar bot automáticamente
+        function restaurarBotAutomatico() {
+            const botConfig = localStorage.getItem('bot_config');
+            if (!botConfig) return;
+            
+            try {
+                const config = JSON.parse(botConfig);
+                
+                // Verificar que la configuración no sea muy antigua (menos de 1 hora)
+                const tiempoTranscurrido = Date.now() - config.timestamp;
+                const unaHora = 60 * 60 * 1000; // 1 hora en milisegundos
+                
+                if (tiempoTranscurrido < unaHora) {
+                    console.log('🔄 Restaurando bot automático...');
+                    
+                    // Configurar la UI con los valores guardados
+                    document.getElementById('accountMode').value = config.modo;
+                    document.getElementById('intervalMinutes').value = config.intervalo / 60000;
+                    
+                    // Si había monto fijo, restaurarlo
+                    if (config.monto !== null) {
+                        document.getElementById('tipoMonto').value = 'fijo';
+                        document.getElementById('montoFijoContainer').style.display = 'block';
+                        document.getElementById('tradeAmount').value = config.monto;
+                    }
+                    
+                    // Iniciar el bot automáticamente después de un breve delay
+                    setTimeout(() => {
+                        console.log('🚀 Iniciando bot automáticamente...');
+                        iniciarBotAutomatico(true); // true = modo silencioso
+                    }, 2000); // 2 segundos de delay para que todo cargue
+                    
+                } else {
+                    // Configuración muy antigua, limpiar
+                    console.log('🧹 Configuración de bot muy antigua, limpiando...');
+                    localStorage.removeItem('bot_config');
+                }
+            } catch (e) {
+                console.error('❌ Error restaurando bot:', e);
+                localStorage.removeItem('bot_config');
+            }
+        }
+
+        // 🔥 NUEVA FUNCIÓN: Mostrar notificación del bot restaurado
+        function mostrarNotificacionBotRestaurado() {
+            // Crear notificación temporal
+            const notificacion = document.createElement('div');
+            notificacion.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #00FF00;
+                color: #000;
+                padding: 15px 20px;
+                border-radius: 8px;
+                font-weight: bold;
+                box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
+                z-index: 10000;
+                animation: slideIn 0.5s ease;
+            `;
+            
+            notificacion.innerHTML = `
+                🤖 BOT RESTAURADO<br>
+                <small>Funcionando automáticamente</small>
+            `;
+            
+            document.body.appendChild(notificacion);
+            
+            // Auto-remover después de 3 segundos
+            setTimeout(() => {
+                notificacion.style.animation = 'slideOut 0.5s ease';
+                setTimeout(() => {
+                    if (notificacion.parentNode) {
+                        notificacion.parentNode.removeChild(notificacion);
+                    }
+                }, 500);
+            }, 3000);
+        }
+
+        // 🔥 AGREGAR ESTOS ESTILOS CSS para las animaciones
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideIn {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            @keyframes slideOut {
+                from { transform: translateX(0); opacity: 1; }
+                to { transform: translateX(100%); opacity: 0; }
+            }
+        `;
+        document.head.appendChild(style);
 
         function showLoginPanel() {
             document.getElementById('loginPanel').classList.remove('hidden');
@@ -1425,8 +1497,8 @@ No se ejecutarán más operaciones hoy.`;
 
         // ==================== BOT AUTOMÁTICO CON PERSISTENCIA ====================
 
-        // Iniciar bot automático CON PERSISTENCIA
-        async function iniciarBotAutomatico() {
+        // Iniciar bot automático CON PERSISTENCIA (versión mejorada)
+        async function iniciarBotAutomatico(silencioso = false) {
             const modo = document.getElementById('accountMode').value;
             const intervalo = parseInt(document.getElementById('intervalMinutes').value) * 60000;
             const tipoMonto = document.getElementById('tipoMonto').value;
@@ -1440,32 +1512,39 @@ No se ejecutarán más operaciones hoy.`;
                 }
             }
 
-            if (confirm(`¿Iniciar bot automático en modo ${modo.toUpperCase()} cada ${intervalo/60000} minutos?
+            // Solo mostrar confirmación si NO es modo silencioso
+            if (!silencioso) {
+                const confirmar = confirm(`¿Iniciar bot automático en modo ${modo.toUpperCase()} cada ${intervalo/60000} minutos?\n\nRiesgo: ${appState.riesgoConfig.riesgo_porcentaje}%\nStop Diario: ${appState.riesgoConfig.stop_loss_diario}%`);
+                if (!confirmar) return;
+            }
 
-Riesgo: ${appState.riesgoConfig.riesgo_porcentaje}%
-Stop Diario: ${appState.riesgoConfig.stop_loss_diario}%`)) {
-                appState.botRunning = true;
-                mostrarBannerBot();
-                
-                // Ejecutar primera operación inmediatamente
+            appState.botRunning = true;
+            mostrarBannerBot();
+            
+            // Ejecutar primera operación inmediatamente
+            ejecutarOperacionAutomatica(monto);
+            
+            // Programar operaciones automáticas
+            appState.intervalId = setInterval(() => {
                 ejecutarOperacionAutomatica(monto);
-                
-                // Programar operaciones automáticas
-                appState.intervalId = setInterval(() => {
-                    ejecutarOperacionAutomatica(monto);
-                }, intervalo);
-                
-                // Iniciar countdown
-                iniciarCountdown(intervalo);
-                
-                // Guardar configuración del bot en localStorage
-                localStorage.setItem('bot_config', JSON.stringify({
-                    running: true,
-                    modo: modo,
-                    intervalo: intervalo,
-                    monto: monto,
-                    timestamp: Date.now()
-                }));
+            }, intervalo);
+            
+            // Iniciar countdown
+            iniciarCountdown(intervalo);
+            
+            // Guardar configuración del bot en localStorage
+            localStorage.setItem('bot_config', JSON.stringify({
+                running: true,
+                modo: modo,
+                intervalo: intervalo,
+                monto: monto,
+                timestamp: Date.now()
+            }));
+
+            if (silencioso) {
+                mostrarNotificacionBotRestaurado();
+            } else {
+                alert(`✅ Bot automático iniciado\n\nModo: ${modo.toUpperCase()}\nIntervalo: ${intervalo/60000} minutos\nRiesgo: ${appState.riesgoConfig.riesgo_porcentaje}%`);
             }
         }
 
