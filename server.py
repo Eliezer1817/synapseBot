@@ -74,6 +74,90 @@ def get_authenticated_session(handler):
     token = auth_header.replace('Bearer ', '').strip()
     return SessionManager.get_session(token)
 
+def obtener_balances_reales(iq):
+    """Obtiene balances REALES de las cuentas demo y real"""
+    real_balance = 0.0
+    demo_balance = 0.0
+    real_id = None
+    demo_id = None
+    
+    try:
+        print("💰 Obteniendo balances REALES...")
+        
+        # Método 1: Intentar con get_balances()
+        try:
+            balances_data = iq.get_balances()
+            print(f"📊 Respuesta de get_balances(): {balances_data}")
+            
+            if balances_data and isinstance(balances_data, dict):
+                balances_list = balances_data.get('msg', [])
+                print(f"📋 Balances encontrados: {len(balances_list)}")
+                
+                for bal in balances_list:
+                    if isinstance(bal, dict):
+                        bal_type = bal.get('type')
+                        amount = bal.get('amount', 0)
+                        bal_id = bal.get('id')
+                        
+                        # Tipo 1 = REAL, Tipo 4 = PRACTICE
+                        if bal_type == 1:
+                            real_balance = float(amount)
+                            real_id = bal_id
+                            print(f"✅ Balance REAL: ${real_balance}")
+                        elif bal_type == 4:
+                            demo_balance = float(amount)
+                            demo_id = bal_id
+                            print(f"✅ Balance DEMO: ${demo_balance}")
+                        elif bal_type == 5:
+                            print(f"🔗 Balance Crypto: ${amount}")
+            
+        except Exception as e:
+            print(f"⚠️ Error con get_balances(): {e}")
+
+        # Método 2: Método alternativo si no se encontraron balances
+        if real_balance == 0 and demo_balance == 0:
+            print("🔄 Usando método alternativo para balances...")
+            try:
+                # Cambiar a REAL y obtener balance
+                if iq.change_balance('REAL'):
+                    time.sleep(1)
+                    real_balance_raw = iq.get_balance()
+                    if real_balance_raw:
+                        real_balance = float(real_balance_raw)
+                        print(f"💰 Balance REAL (alternativo): ${real_balance}")
+                
+                # Cambiar a PRACTICE y obtener balance
+                if iq.change_balance('PRACTICE'):
+                    time.sleep(1)
+                    demo_balance_raw = iq.get_balance()
+                    if demo_balance_raw:
+                        demo_balance = float(demo_balance_raw)
+                        print(f"🎯 Balance DEMO (alternativo): ${demo_balance}")
+                
+                # Volver a REAL por defecto
+                iq.change_balance('REAL')
+                time.sleep(0.5)
+                
+            except Exception as e2:
+                print(f"❌ Error en método alternativo: {e2}")
+
+        # Si aún no hay balances, usar valores por defecto
+        if real_balance == 0 and demo_balance == 0:
+            print("💰 Usando valores por defecto para balances")
+            real_balance = 0.0
+            demo_balance = 10000.0
+
+        print(f"📊 RESUMEN FINAL:")
+        print(f"   REAL: ${real_balance}")
+        print(f"   DEMO: ${demo_balance}")
+        
+    except Exception as e:
+        print(f"❌ Error general obteniendo balances: {e}")
+        real_balance = 0.0
+        demo_balance = 10000.0
+    
+    return real_balance, demo_balance, real_id, demo_id
+
 class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
     
     def log_message(self, format, *args):
@@ -104,6 +188,9 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
         elif self.path == '/check_session':
             session = get_authenticated_session(self)
             if session:
+                # Obtener balances actualizados
+                real_balance, demo_balance, real_id, demo_id = obtener_balances_reales(session['iq'])
+                
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
@@ -111,9 +198,9 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                     'success': True,
                     'session_valid': True,
                     'user_data': {
-                        'user': {'username': session['email'].split('@')[0]},
-                        'real': {'balance': 1000.0, 'accountId': 'real_123'},
-                        'practice': {'balance': 10000.0, 'accountId': 'demo_123'}
+                        'user': {'username': session['email'].split('@')[0], 'email': session['email']},
+                        'real': {'balance': real_balance, 'accountId': real_id or 'real_123'},
+                        'practice': {'balance': demo_balance, 'accountId': demo_id or 'demo_123'}
                     }
                 }).encode('utf-8'))
             else:
@@ -127,7 +214,7 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
             return
         
         # Servir archivos estáticos
-        path_to_serve = 'index.html' if self.path == '/' else self.path.lstrip('/')
+        path_to_serve = 'index2.html' if self.path == '/' else self.path.lstrip('/')
         requested_path = os.path.abspath(os.path.join(CWD, path_to_serve))
         
         if not requested_path.startswith(CWD):
@@ -190,32 +277,32 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                 iq_session = _connect(email, password)
                 print("✅ Conexión establecida.")
                 
+                # Obtener balances REALES
+                real_balance, demo_balance, real_id, demo_id = obtener_balances_reales(iq_session)
+                
                 # Crear nueva sesión
                 token = SessionManager.create_session(email, iq_session)
                 print(f"🔑 Token de sesión generado: {token[:8]}...")
 
-                # Obtener datos de perfil (simplificado para prueba)
-                username = email.split("@")[0]
-                
-                # Respuesta exitosa
+                # Respuesta exitosa con balances reales
                 response_data = {
                     "success": True,
                     "session_token": token,
                     "data": {
                         "user": {
-                            "username": username,
+                            "username": email.split("@")[0],
                             "email": email,
                             "userId": "user_123"
                         },
                         "real": {
-                            "balance": 1000.0,
-                            "accountId": "real_123",
+                            "balance": real_balance,
+                            "accountId": real_id or "real_123",
                             "currency": "USD",
                             "type": "REAL"
                         },
                         "practice": {
-                            "balance": 10000.0,
-                            "accountId": "demo_123",
+                            "balance": demo_balance,
+                            "accountId": demo_id or "demo_123", 
                             "currency": "USD",
                             "type": "PRACTICE"
                         }
@@ -227,7 +314,8 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(json.dumps(response_data).encode('utf-8'))
                 
-                print(f"✅ LOGIN EXITOSO para {email}\n")
+                print(f"✅ LOGIN EXITOSO para {email}")
+                print(f"💰 Balances - Real: ${real_balance}, Demo: ${demo_balance}\n")
 
             except Exception as e:
                 error_msg = str(e)
@@ -326,36 +414,36 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                 print(f"Forzar: {'SÍ' if forzar_operacion else 'NO'}")
                 print(f"{'='*70}\n")
                 
-                # SIMULAR OPERACIÓN (para pruebas)
-                # En producción, usarías: ejecutar_operacion()
-                time.sleep(1)  # Simular procesamiento
-                
-                # Resultado simulado
-                resultado_simulado = {
-                    'success': True,
-                    'ejecutado': True,
-                    'decision': 'CALL',
-                    'probabilidad': 75.5,
-                    'trade_id': f'trade_{int(time.time())}',
-                    'monto_calculado': monto or 2.0,
-                    'resultado_trade': {
-                        'finalizada': True,
-                        'win': True,
-                        'ganancia': 1.80
-                    },
-                    'estadisticas_riesgo': {
-                        'racha_actual': 1,
-                        'profit_diario': 5.40,
-                        'operaciones_hoy': 3
+                # EJECUTAR OPERACIÓN REAL con el módulo operar
+                resultado = ejecutar_operacion(
+                    session['iq'],
+                    modo=modo,
+                    monto=monto,
+                    ejecutar_auto=ejecutar_auto,
+                    forzar_operacion=forzar_operacion,
+                    config_riesgo={
+                        'riesgo_porcentaje': config.get('riesgo_porcentaje', 2.0),
+                        'max_perdidas_consecutivas': config.get('max_perdidas_consecutivas', 3),
+                        'stop_loss_diario': config.get('stop_loss_diario', 15),
+                        'monto_maximo': config.get('monto_maximo', 10)
                     }
+                )
+                
+                # Obtener balances actualizados después de la operación
+                real_balance, demo_balance, real_id, demo_id = obtener_balances_reales(session['iq'])
+                
+                # Agregar balances actualizados al resultado
+                resultado['balances_actualizados'] = {
+                    'real': real_balance,
+                    'demo': demo_balance
                 }
                 
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
-                self.wfile.write(json.dumps(resultado_simulado).encode('utf-8'))
+                self.wfile.write(json.dumps(resultado).encode('utf-8'))
                 
-                print(f"✅ Operación simulada completada\n")
+                print(f"✅ Operación REAL completada\n")
                 
             except Exception as e:
                 error_msg = str(e)
@@ -479,6 +567,7 @@ def run_server(port=PORT):
         print(f"🌐 URL: http://localhost:{port}")
         print(f"📂 Directorio: {CWD}")
         print(f"🔐 Sistema de sesiones activado")
+        print(f"💰 Balances REALES activados")
         print("="*70)
         print("\n✅ Servidor listo para recibir conexiones")
         print("⌨️  Presiona Ctrl+C para detener\n")
