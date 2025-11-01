@@ -127,7 +127,7 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
             return
         
         # Servir archivos estáticos
-        path_to_serve = 'index2.html' if self.path == '/' else self.path.lstrip('/')
+        path_to_serve = 'index.html' if self.path == '/' else self.path.lstrip('/')
         requested_path = os.path.abspath(os.path.join(CWD, path_to_serve))
         
         if not requested_path.startswith(CWD):
