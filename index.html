@@ -413,7 +413,7 @@
             box-shadow: 0 0 10px rgba(255, 102, 0, 0.3);
         }
 
-        /* Gestión de Riesgo */
+        /* Nueva Sección: Gestión de Riesgo */
         .risk-config-section {
             background: #0a0a0a;
             border: 2px solid #00FF00;
@@ -471,7 +471,7 @@
             color: #00FF00;
         }
 
-        /* Slider */
+        /* Slider personalizado */
         .slider-container {
             display: flex;
             align-items: center;
@@ -502,6 +502,49 @@
             border-radius: 50%;
             cursor: pointer;
             box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+        }
+
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 60px;
+            height: 30px;
+            background: #333;
+            border-radius: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .toggle-switch.active {
+            background: #00FF00;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.6);
+        }
+
+        .toggle-slider {
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 24px;
+            height: 24px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.3s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .toggle-switch.active .toggle-slider {
+            transform: translateX(30px);
+        }
+
+        .toggle-label {
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s;
         }
 
         .btn-trade {
@@ -539,6 +582,7 @@
         #manualBtn:hover:not(:disabled) {
             background: #FF8800;
             box-shadow: 0 0 30px rgba(255, 102, 0, 0.7);
+            transform: translateY(-2px);
         }
 
         /* Accounts */
@@ -680,6 +724,11 @@
             background: rgba(255, 0, 0, 0.2);
             color: #FF0000;
             box-shadow: 0 0 10px rgba(255, 0, 0, 0.3);
+        }
+
+        .trade-type.skip {
+            background: rgba(255, 165, 0, 0.2);
+            color: #FFA500;
         }
 
         .trade-time {
@@ -863,7 +912,7 @@
                     </div>
                 </div>
 
-                <!-- Gestión de Riesgo -->
+                <!-- Nueva Sección: Gestión Inteligente de Riesgo -->
                 <div class="risk-config-section">
                     <h3>🎯 Gestión Inteligente de Riesgo</h3>
                     <div class="config-help">
@@ -871,6 +920,7 @@
                     </div>
                     
                     <div class="control-grid">
+                        <!-- Porcentaje de Riesgo -->
                         <div class="control-item">
                             <label class="control-label">% Riesgo por Operación</label>
                             <div class="slider-container">
@@ -882,6 +932,7 @@
                             </div>
                         </div>
                         
+                        <!-- Protección de Racha -->
                         <div class="control-item">
                             <label class="control-label">Protección por Racha</label>
                             <input type="number" id="maxPerdidasConsecutivas" class="control-input" value="3" min="2" max="6">
@@ -890,6 +941,7 @@
                             </div>
                         </div>
                         
+                        <!-- Stop Loss Diario -->
                         <div class="control-item">
                             <label class="control-label">Stop Loss Diario</label>
                             <div class="slider-container">
@@ -901,6 +953,7 @@
                             </div>
                         </div>
                         
+                        <!-- Monto Máximo -->
                         <div class="control-item">
                             <label class="control-label">Monto Máximo por Operación ($)</label>
                             <input type="number" id="montoMaximo" class="control-input" value="10" min="2" max="50" step="1">
@@ -910,7 +963,7 @@
                         </div>
                     </div>
 
-                    <!-- Monitor de Riesgo -->
+                    <!-- Monitor de Riesgo en Tiempo Real -->
                     <div class="risk-monitor">
                         <h4>📈 Monitor de Riesgo en Tiempo Real</h4>
                         <div class="risk-metrics">
@@ -938,14 +991,14 @@
                     <button class="btn-trade" id="tradeBtn" onclick="iniciarBotAutomatico()">
                         🤖 INICIAR BOT AUTOMÁTICO
                     </button>
-                    <button class="btn-trade" id="manualBtn" onclick="operacionManual()">
+                    <button class="btn-trade" id="manualBtn" onclick="operacionManual()" style="background: #FF6600; box-shadow: 0 0 20px rgba(255, 102, 0, 0.5);">
                         🎯 OPERACIÓN MANUAL
                     </button>
                 </div>
                 
                 <div style="text-align: center; margin-top: 15px; font-size: 13px; color: #999;">
                     <strong>Bot Automático:</strong> Analiza y opera automáticamente cada intervalo<br>
-                    <strong>Manual:</strong> Ejecuta una operación inmediatamente
+                    <strong>Manual:</strong> Ejecuta una operación inmediatamente (forzando 'CALL' si no hay señal)
                 </div>
             </div>
 
@@ -986,10 +1039,8 @@
     </div>
 
     <script>
-        // Estado global con persistencia
+        // Estado global
         const appState = {
-            sessionToken: null,
-            userData: null,
             botRunning: false,
             intervalId: null,
             countdownId: null,
@@ -1008,33 +1059,9 @@
             }
         };
 
-        // Guardar token en localStorage
-        function saveSessionToken(token) {
-            localStorage.setItem('iq_session_token', token);
-            appState.sessionToken = token;
-        }
-
-        // Obtener token guardado
-        function getSessionToken() {
-            return localStorage.getItem('iq_session_token');
-        }
-
-        // Limpiar token
-        function clearSessionToken() {
-            localStorage.removeItem('iq_session_token');
-            appState.sessionToken = null;
-        }
-
-        // Headers con autenticación
-        function getAuthHeaders() {
-            return {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${appState.sessionToken || getSessionToken()}`
-            };
-        }
-
         // Inicializar sliders
         document.addEventListener('DOMContentLoaded', function() {
+            // Configurar sliders
             const riesgoSlider = document.getElementById('riesgoPorcentaje');
             const stopLossSlider = document.getElementById('stopLossDiario');
             
@@ -1049,6 +1076,7 @@
                 appState.riesgoConfig.stop_loss_diario = parseInt(this.value);
             });
             
+            // Configurar otros inputs de riesgo
             document.getElementById('maxPerdidasConsecutivas').addEventListener('input', function() {
                 appState.riesgoConfig.max_perdidas_consecutivas = parseInt(this.value);
             });
@@ -1057,75 +1085,19 @@
                 appState.riesgoConfig.monto_maximo = parseInt(this.value);
             });
             
+            // Calcular monto sugerido inicial
             calcularMontoSugerido();
-            checkSession();
         });
 
-        // Verificar sesión al cargar
-        async function checkSession() {
-            const token = getSessionToken();
-            
-            if (!token) {
-                showLoginPanel();
-                return;
-            }
-
-            try {
-                const res = await fetch('/check_session', {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-
-                const data = await res.json();
-
-                if (data.success && data.session_valid) {
-                    appState.sessionToken = token;
-                    appState.userData = data.user_data;
-                    await restoreDashboard(data.user_data);
-                    console.log('✅ Sesión restaurada');
-                } else {
-                    clearSessionToken();
-                    showLoginPanel();
-                }
-            } catch (err) {
-                console.error('Error verificando sesión:', err);
-                clearSessionToken();
-                showLoginPanel();
-            }
-        }
-
-        // Mostrar panel de login
-        function showLoginPanel() {
-            document.getElementById('loginPanel').classList.remove('hidden');
-            document.getElementById('dashboard').classList.add('hidden');
-        }
-
-        // Restaurar dashboard
-        async function restoreDashboard(userData) {
-            const { user, real, practice } = userData;
-
-            document.getElementById('userName').textContent = user.username;
-            document.getElementById('realBalance').textContent = `${real.balance.toFixed(2)}`;
-            document.getElementById('demoBalance').textContent = `${practice.balance.toFixed(2)}`;
-            document.getElementById('realId').textContent = real.accountId || 'N/A';
-            document.getElementById('demoId').textContent = practice.accountId || 'N/A';
-            document.getElementById('totalBalance').textContent = `${(real.balance + practice.balance).toFixed(2)}`;
-
-            calcularMontoSugerido();
-
-            document.getElementById('loginPanel').classList.add('hidden');
-            document.getElementById('dashboard').classList.remove('hidden');
-        }
-
-        // Calcular monto sugerido
+        // Calcular monto sugerido basado en balance y configuración
         function calcularMontoSugerido() {
-            const balance = parseFloat(document.getElementById('realBalance').textContent.replace(', '')) || 
-                           parseFloat(document.getElementById('demoBalance').textContent.replace(', '')) || 10000;
+            const balance = parseFloat(document.getElementById('realBalance').textContent.replace('$', '')) || 
+                           parseFloat(document.getElementById('demoBalance').textContent.replace('$', '')) || 10000;
             
             const riesgo = appState.riesgoConfig.riesgo_porcentaje;
             const montoBase = balance * (riesgo / 100);
             
+            // Aplicar límites
             let montoFinal = montoBase;
             if (balance < 100) {
                 montoFinal = Math.min(montoFinal, 2);
@@ -1135,13 +1107,13 @@
                 montoFinal = Math.min(montoFinal, appState.riesgoConfig.monto_maximo);
             }
             
-            montoFinal = Math.max(1, montoFinal);
+            montoFinal = Math.max(1, montoFinal); // Mínimo $1
             
-            document.getElementById('montoSugerido').textContent = ' + montoFinal.toFixed(2);
+            document.getElementById('montoSugerido').textContent = '$' + montoFinal.toFixed(2);
             document.getElementById('riesgoActual').textContent = riesgo.toFixed(1) + '%';
         }
 
-        // Toggle tipo de monto
+        // Toggle entre monto automático y fijo
         function toggleTipoMonto() {
             const tipo = document.getElementById('tipoMonto').value;
             const montoFijoContainer = document.getElementById('montoFijoContainer');
@@ -1154,76 +1126,13 @@
             }
         }
 
-        // Login
-        document.getElementById('loginForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-
-            const email = document.getElementById('emailInput').value;
-            const password = document.getElementById('passwordInput').value;
-            const connectBtn = document.getElementById('connectBtn');
-            const loadingText = document.getElementById('loadingText');
-
-            connectBtn.disabled = true;
-            loadingText.classList.remove('hidden');
-
-            try {
-                const res = await fetch('/login', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ email, password })
-                });
-
-                const json = await res.json();
-                
-                if (!res.ok || !json.success) {
-                    throw new Error(json.error || 'Error al iniciar sesión');
-                }
-
-                saveSessionToken(json.session_token);
-                appState.userData = json.data;
-
-                await restoreDashboard(json.data);
-
-            } catch (err) {
-                alert(err.message);
-            } finally {
-                connectBtn.disabled = false;
-                loadingText.classList.add('hidden');
-            }
-        });
-
-        // Logout
-        async function logout() {
-            if (!confirm('¿Cerrar sesión?')) return;
-
-            if (appState.botRunning) {
-                detenerBot();
-            }
-
-            try {
-                await fetch('/logout', {
-                    method: 'POST',
-                    headers: getAuthHeaders()
-                });
-            } catch (err) {
-                console.error('Error en logout:', err);
-            } finally {
-                clearSessionToken();
-                appState.userData = null;
-                appState.trades = [];
-                appState.stats = {wins: 0, losses: 0, profit: 0};
-                showLoginPanel();
-                document.getElementById('loginForm').reset();
-            }
-        }
-
         // Operación Manual
         async function operacionManual() {
             const manualBtn = document.getElementById('manualBtn');
             const modo = document.getElementById('accountMode').value;
             const tipoMonto = document.getElementById('tipoMonto').value;
             
-            let monto = null;
+            let monto = null; // Por defecto automático
             
             if (tipoMonto === 'fijo') {
                 monto = parseFloat(document.getElementById('tradeAmount').value);
@@ -1234,7 +1143,7 @@
             }
 
             if (appState.botRunning) {
-                alert('⚠️ El bot automático está en ejecución. Deténlo primero.');
+                alert('⚠️ El bot automático está en ejecución. Deténlo primero para hacer operaciones manuales.');
                 return;
             }
 
@@ -1244,7 +1153,7 @@
             try {
                 const res = await fetch('/operar', {
                     method: 'POST',
-                    headers: getAuthHeaders(),
+                    headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         modo: modo,
                         monto: monto,
@@ -1259,24 +1168,51 @@
                     throw new Error(data.error || 'Error en la operación');
                 }
 
+                // Actualizar estadísticas de riesgo
                 if (data.estadisticas_riesgo) {
                     actualizarMonitorRiesgo(data.estadisticas_riesgo);
                 }
 
+                // Agregar al historial solo si se ejecutó
                 if (data.ejecutado) {
                     agregarTradeHistorial(data);
                     actualizarEstadisticas();
-                    
+                }
+
+                // Mostrar resultado
+                if (data.ejecutado) {
                     if (data.resultado_trade && data.resultado_trade.finalizada) {
                         const resultado = data.resultado_trade;
                         const emoji = resultado.win ? '✅' : '❌';
                         const texto = resultado.win ? 'GANASTE' : 'PERDISTE';
-                        alert(`${emoji} OPERACIÓN COMPLETADA\n\n${texto}: ${Math.abs(resultado.ganancia).toFixed(2)}\n\nDecisión: ${data.decision}\nMonto: ${data.monto_calculado || data.monto}`);
+                        alert(`${emoji} OPERACIÓN COMPLETADA
+
+${texto}: ${Math.abs(resultado.ganancia).toFixed(2)}
+
+Decisión: ${data.decision}
+Probabilidad: ${data.probabilidad}
+Monto: $${data.monto_calculado || data.monto}`);
                     } else {
-                        alert(`⏳ Operación ejecutada\n\nDecisión: ${data.decision}\nID: ${data.trade_id}\nMonto: ${data.monto_calculado || data.monto}`);
+                        alert(`⏳ Operación ejecutada
+
+Decisión: ${data.decision}
+ID: ${data.trade_id}
+Monto: $${data.monto_calculado || data.monto}
+
+Esperando resultado...`);
                     }
                 } else {
-                    alert(`❌ No se pudo ejecutar\n\nRazón: ${data.razon || 'Desconocida'}`);
+                    let mensaje = `❌ No se pudo ejecutar la operación.
+
+Razón: ${data.razon || 'Desconocida'}`;
+                    if (data.decision === 'STOP_LOSS') {
+                        mensaje = `🛑 STOP LOSS DIARIO ACTIVADO
+
+Profit hoy: $${data.estadisticas_riesgo?.profit_diario || 0}
+
+No se ejecutarán más operaciones hoy.`;
+                    }
+                    alert(mensaje);
                 }
 
             } catch (err) {
@@ -1302,16 +1238,22 @@
                 }
             }
 
-            if (confirm(`¿Iniciar bot automático en modo ${modo.toUpperCase()} cada ${intervalo/60000} minutos?`)) {
+            if (confirm(`¿Iniciar bot automático en modo ${modo.toUpperCase()} cada ${intervalo/60000} minutos?
+
+Riesgo: ${appState.riesgoConfig.riesgo_porcentaje}%
+Stop Diario: ${appState.riesgoConfig.stop_loss_diario}%`)) {
                 appState.botRunning = true;
                 mostrarBannerBot();
                 
+                // Ejecutar primera operación inmediatamente
                 ejecutarOperacionAutomatica(monto);
                 
+                // Programar operaciones automáticas
                 appState.intervalId = setInterval(() => {
                     ejecutarOperacionAutomatica(monto);
                 }, intervalo);
                 
+                // Iniciar countdown
                 iniciarCountdown(intervalo);
             }
         }
@@ -1323,7 +1265,7 @@
             try {
                 const res = await fetch('/operar', {
                     method: 'POST',
-                    headers: getAuthHeaders(),
+                    headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         modo: modo,
                         monto: montoFijo,
@@ -1335,10 +1277,12 @@
                 const data = await res.json();
 
                 if (data.success) {
+                    // Actualizar estadísticas de riesgo
                     if (data.estadisticas_riesgo) {
                         actualizarMonitorRiesgo(data.estadisticas_riesgo);
                     }
 
+                    // Solo agregar al historial si se ejecutó
                     if (data.ejecutado) {
                         agregarTradeHistorial(data);
                         actualizarEstadisticas();
@@ -1346,6 +1290,7 @@
                         appState.autoTradesCount++;
                         document.getElementById('autoTradesCount').textContent = appState.autoTradesCount;
                         
+                        // Actualizar último resultado
                         if (data.resultado_trade && data.resultado_trade.finalizada) {
                             const lastResultEl = document.getElementById('lastResult');
                             if (data.resultado_trade.win) {
@@ -1367,43 +1312,50 @@
         // Actualizar monitor de riesgo
         function actualizarMonitorRiesgo(estadisticas) {
             document.getElementById('rachaActual').textContent = estadisticas.racha_actual;
-            document.getElementById('profitHoy').textContent = ' + estadisticas.profit_diario.toFixed(2);
+            document.getElementById('profitHoy').textContent = '$' + estadisticas.profit_diario.toFixed(2);
             
+            // Color del profit
             const profitEl = document.getElementById('profitHoy');
             profitEl.style.color = estadisticas.profit_diario >= 0 ? '#00FF00' : '#FF0000';
             
+            // Color de la racha
             const rachaEl = document.getElementById('rachaActual');
             rachaEl.style.color = estadisticas.racha_actual >= 0 ? '#00FF00' : '#FF0000';
         }
 
-        // Reset riesgo
+        // Resetear estadísticas de riesgo
         async function resetRiesgo() {
             try {
                 const res = await fetch('/reset_riesgo', {
                     method: 'POST',
-                    headers: getAuthHeaders()
+                    headers: {'Content-Type': 'application/json'}
                 });
 
                 const data = await res.json();
                 
                 if (data.success) {
+                    // Resetear UI
                     document.getElementById('rachaActual').textContent = '0';
                     document.getElementById('profitHoy').textContent = '$0.00';
                     document.getElementById('rachaActual').style.color = '#00FF00';
                     document.getElementById('profitHoy').style.color = '#00FF00';
                     
-                    alert('✅ Estadísticas reseteadas');
+                    alert('✅ Estadísticas de riesgo reseteadas');
                 } else {
                     throw new Error(data.error);
                 }
             } catch (err) {
-                alert('❌ Error: ' + err.message);
+                alert('❌ Error reseteando riesgo: ' + err.message);
             }
         }
 
+        // [El resto del código JavaScript permanece igual...]
+        // Detener bot, mostrar/ocultar banner, countdown, agregarTradeHistorial, 
+        // renderHistorial, actualizarEstadisticas, clearHistory, logout, login, etc.
+
         // Detener bot
         function detenerBot() {
-            if (confirm('¿Detener el bot automático?')) {
+            if (confirm('¿Estás seguro de detener el bot automático?')) {
                 appState.botRunning = false;
                 
                 if (appState.intervalId) {
@@ -1417,23 +1369,24 @@
                 }
                 
                 ocultarBannerBot();
-                document.getElementById('tradeBtn').textContent = '🤖 INICIAR BOT AUTOMÁTICO';
+                document.getElementById('tradeBtn').textContent = '🚀 INICIAR BOT AUTOMÁTICO';
             }
         }
 
-        // Mostrar/ocultar banner
+        // Mostrar banner del bot
         function mostrarBannerBot() {
             document.getElementById('botStatusBanner').classList.add('active');
             document.getElementById('tradeBtn').textContent = '🟢 BOT EN EJECUCIÓN';
             document.getElementById('tradeBtn').disabled = true;
         }
 
+        // Ocultar banner del bot
         function ocultarBannerBot() {
             document.getElementById('botStatusBanner').classList.remove('active');
             document.getElementById('tradeBtn').disabled = false;
         }
 
-        // Countdown
+        // Countdown para próximo análisis
         function iniciarCountdown(intervaloMs) {
             let segundosRestantes = intervaloMs / 1000;
             
@@ -1456,10 +1409,11 @@
             appState.countdownId = setInterval(actualizarCountdown, 1000);
         }
 
-        // Agregar trade al historial
+        // Agregar trade al historial - SOLO SI SE EJECUTÓ
         function agregarTradeHistorial(data) {
+            // Solo agregar si realmente se ejecutó una operación
             if (!data.ejecutado || data.decision === 'SKIP') {
-                return;
+                return; // No agregar al historial si no se ejecutó o fue SKIP
             }
 
             const trade = {
@@ -1471,11 +1425,12 @@
                 ejecutado: data.ejecutado,
                 trade_id: data.trade_id,
                 resultado: data.resultado_trade,
-                monto: data.monto_calculado || data.monto
+                monto: data.monto_calculado || parseFloat(document.getElementById('tradeAmount').value)
             };
 
             appState.trades.unshift(trade);
             
+            // Limitar historial a 50 operaciones
             if (appState.trades.length > 50) {
                 appState.trades = appState.trades.slice(0, 50);
             }
@@ -1483,10 +1438,11 @@
             renderHistorial();
         }
 
-        // Render historial
+        // Render historial - SOLO OPERACIONES EJECUTADAS
         function renderHistorial() {
             const list = document.getElementById('tradeList');
             
+            // Filtrar solo operaciones ejecutadas (que tengan trade_id)
             const operacionesEjecutadas = appState.trades.filter(trade => 
                 trade.ejecutado && trade.trade_id
             );
@@ -1521,7 +1477,7 @@
                             <span class="trade-time">${trade.timestamp}</span>
                         </div>
                         <div style="font-size: 13px; color: #CCCCCC; margin: 5px 0;">
-                            Modo: ${trade.modo.toUpperCase()} | Prob: ${trade.probabilidad} | Monto: ${trade.monto}
+                            Modo: ${trade.modo.toUpperCase()} | Prob: ${trade.probabilidad} | Monto: $${trade.monto}
                         </div>
                         <div style="font-size: 11px; color: #666;">ID: ${trade.trade_id}</div>
                         <div class="trade-details">
@@ -1532,10 +1488,11 @@
             }).join('');
         }
 
-        // Actualizar estadísticas
+        // Actualizar estadísticas - SOLO OPERACIONES EJECUTADAS
         function actualizarEstadisticas() {
             let wins = 0, losses = 0, profit = 0;
 
+            // Filtrar solo operaciones ejecutadas con resultado
             const operacionesConResultado = appState.trades.filter(trade => 
                 trade.ejecutado && trade.resultado && trade.resultado.finalizada
             );
@@ -1548,10 +1505,11 @@
 
             appState.stats = { wins, losses, profit };
 
+            // Mostrar contador de operaciones EJECUTADAS
             document.getElementById('tradesCount').textContent = operacionesConResultado.length;
             
             const profitEl = document.getElementById('profitLoss');
-            profitEl.textContent = `${profit.toFixed(2)}`;
+            profitEl.textContent = `$${profit.toFixed(2)}`;
             profitEl.className = 'stat-value ' + (profit >= 0 ? 'positive' : 'negative');
 
             const total = wins + losses;
@@ -1561,7 +1519,7 @@
 
         // Limpiar historial
         function clearHistory() {
-            if (confirm('¿Limpiar el historial?')) {
+            if (confirm('¿Seguro que quieres limpiar el historial?')) {
                 appState.trades = [];
                 appState.autoTradesCount = 0;
                 appState.stats = { wins: 0, losses: 0, profit: 0 };
@@ -1572,11 +1530,70 @@
             }
         }
 
-        // Prevenir cierre accidental
+        // Logout
+        function logout() {
+            // Detener bot si está corriendo
+            if (appState.botRunning) {
+                detenerBot();
+            }
+            
+            document.getElementById('dashboard').classList.add('hidden');
+            document.getElementById('loginPanel').classList.remove('hidden');
+            document.getElementById('loginForm').reset();
+        }
+
+        // Login
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const email = document.getElementById('emailInput').value;
+            const password = document.getElementById('passwordInput').value;
+            const connectBtn = document.getElementById('connectBtn');
+            const loadingText = document.getElementById('loadingText');
+
+            connectBtn.disabled = true;
+            loadingText.classList.remove('hidden');
+
+            try {
+                const res = await fetch('/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ email, password })
+                });
+
+                const json = await res.json();
+                if (!res.ok || !json.success) {
+                    throw new Error(json.error || 'Error al iniciar sesión');
+                }
+
+                const { user, real, practice } = json.data;
+
+                document.getElementById('userName').textContent = user.username;
+                document.getElementById('realBalance').textContent = `$${real.balance.toFixed(2)}`;
+                document.getElementById('demoBalance').textContent = `$${(practice.balance || 0).toFixed(2)}`;
+                document.getElementById('realId').textContent = real.accountId || 'N/A';
+                document.getElementById('demoId').textContent = practice.accountId || 'N/A';
+                document.getElementById('totalBalance').textContent = `$${(real.balance + (practice.balance || 0)).toFixed(2)}`;
+
+                // Calcular monto sugerido después del login
+                calcularMontoSugerido();
+
+                document.getElementById('loginPanel').classList.add('hidden');
+                document.getElementById('dashboard').classList.remove('hidden');
+
+            } catch (err) {
+                alert(err.message);
+            } finally {
+                connectBtn.disabled = false;
+                loadingText.classList.add('hidden');
+            }
+        });
+
+        // Prevenir cierre accidental cuando el bot está corriendo
         window.addEventListener('beforeunload', (e) => {
             if (appState.botRunning) {
                 e.preventDefault();
-                e.returnValue = '¿Estás seguro? El bot se detendrá.';
+                e.returnValue = '¿Estás seguro? El bot automático se detendrá.';
             }
         });
     </script>
