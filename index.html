@@ -1153,8 +1153,23 @@
                     // Iniciar el bot automáticamente después de un breve delay
                     setTimeout(() => {
                         console.log('🚀 Iniciando bot automáticamente...');
-                        iniciarBotAutomatico(true); // true = modo silencioso
-                    }, 2000); // 2 segundos de delay para que todo cargue
+                        
+                        // Configurar el estado del bot como running
+                        appState.botRunning = true;
+                        mostrarBannerBot();
+                        
+                        // Programar operaciones automáticas con el intervalo guardado
+                        appState.intervalId = setInterval(() => {
+                            ejecutarOperacionAutomatica(config.monto);
+                        }, config.intervalo);
+                        
+                        // Iniciar countdown con persistencia
+                        iniciarCountdown(config.intervalo);
+                        
+                        // Mostrar notificación
+                        mostrarNotificacionBotRestaurado();
+                        
+                    }, 1000); // 1 segundo de delay
                     
                 } else {
                     // Configuración muy antigua, limpiar
@@ -1499,6 +1514,9 @@ No se ejecutarán más operaciones hoy.`;
 
         // Iniciar bot automático CON PERSISTENCIA (versión mejorada)
         async function iniciarBotAutomatico(silencioso = false) {
+            // Limpiar countdown anterior si existe
+            localStorage.removeItem('bot_countdown');
+            
             const modo = document.getElementById('accountMode').value;
             const intervalo = parseInt(document.getElementById('intervalMinutes').value) * 60000;
             const tipoMonto = document.getElementById('tipoMonto').value;
@@ -1601,6 +1619,9 @@ No se ejecutarán más operaciones hoy.`;
 
         // Detener bot CON PERSISTENCIA
         function detenerBot() {
+            // Limpiar countdown del localStorage
+            localStorage.removeItem('bot_countdown');
+            
             if (confirm('¿Estás seguro de detener el bot automático?')) {
                 appState.botRunning = false;
                 
@@ -1637,12 +1658,37 @@ No se ejecutarán más operaciones hoy.`;
             document.getElementById('tradeBtn').disabled = false;
         }
 
-        // Countdown para próximo análisis
+        // Countdown mejorado con persistencia
         function iniciarCountdown(intervaloMs) {
-            let segundosRestantes = intervaloMs / 1000;
+            // Intentar restaurar el tiempo restante desde localStorage
+            const countdownData = localStorage.getItem('bot_countdown');
+            let segundosRestantes;
+            
+            if (countdownData) {
+                try {
+                    const data = JSON.parse(countdownData);
+                    const tiempoTranscurrido = Date.now() - data.timestamp;
+                    segundosRestantes = Math.max(0, data.segundosRestantes - Math.floor(tiempoTranscurrido / 1000));
+                    console.log(`🕒 Countdown restaurado: ${segundosRestantes}s restantes`);
+                } catch (e) {
+                    segundosRestantes = intervaloMs / 1000;
+                }
+            } else {
+                segundosRestantes = intervaloMs / 1000;
+            }
             
             const actualizarCountdown = () => {
-                if (!appState.botRunning) return;
+                if (!appState.botRunning) {
+                    localStorage.removeItem('bot_countdown');
+                    return;
+                }
+                
+                // Guardar estado actual en localStorage
+                localStorage.setItem('bot_countdown', JSON.stringify({
+                    segundosRestantes: segundosRestantes,
+                    timestamp: Date.now(),
+                    intervaloMs: intervaloMs
+                }));
                 
                 const minutos = Math.floor(segundosRestantes / 60);
                 const segundos = Math.floor(segundosRestantes % 60);
@@ -1653,10 +1699,19 @@ No se ejecutarán más operaciones hoy.`;
                 
                 if (segundosRestantes < 0) {
                     segundosRestantes = intervaloMs / 1000;
+                    // Limpiar localStorage cuando complete un ciclo
+                    localStorage.removeItem('bot_countdown');
                 }
             };
             
+            // Ejecutar inmediatamente para mostrar el tiempo correcto
             actualizarCountdown();
+            
+            // Limpiar cualquier intervalo anterior
+            if (appState.countdownId) {
+                clearInterval(appState.countdownId);
+            }
+            
             appState.countdownId = setInterval(actualizarCountdown, 1000);
         }
 
