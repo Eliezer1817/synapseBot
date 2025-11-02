@@ -654,15 +654,13 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                 if not session:
                     raise Exception("No hay sesión activa")
                 
-                # 🔥 CORRECCIÓN: Declarar global PRIMERO
-                global bot_servidor_activo, bot_servidor_config, bot_servidor_thread
+                global bot_servidor_activo, bot_servidor_config, bot_servidor_thread, bot_servidor_estadisticas
                 
-                # Ahora sí podemos usar la variable
                 if bot_servidor_activo:
                     raise Exception("El bot servidor ya está activo")
                 
                 content_length = int(self.headers.get('Content-Length', 0))
-                post_data = self.rfile.read(content_length) if content_length > 0 else b'{}'
+                post_data = self.rfile.read(content_length) if content_length > 0 else b'{}}'
                 config = json.loads(post_data.decode('utf-8'))
                 
                 # Guardar configuración
@@ -670,7 +668,7 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                 bot_servidor_activo = True
                 
                 # Reiniciar estadísticas
-                global bot_servidor_estadisticas
+
                 bot_servidor_estadisticas = {
                     'operaciones_ejecutadas': 0,
                     'operaciones_exitosas': 0,
@@ -714,10 +712,8 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                 if not session:
                     raise Exception("No hay sesión activa")
                 
-                # 🔥 CORRECCIÓN: Declarar global PRIMERO
                 global bot_servidor_activo
                 
-                # Ahora sí podemos usar la variable
                 if not bot_servidor_activo:
                     raise Exception("El bot servidor no está activo")
                 
