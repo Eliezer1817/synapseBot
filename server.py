@@ -654,8 +654,10 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                 if not session:
                     raise Exception("No hay sesión activa")
                 
+                # 🔥 CORRECCIÓN: Declarar global PRIMERO
                 global bot_servidor_activo, bot_servidor_config, bot_servidor_thread
                 
+                # Ahora sí podemos usar la variable
                 if bot_servidor_activo:
                     raise Exception("El bot servidor ya está activo")
                 
@@ -712,8 +714,10 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                 if not session:
                     raise Exception("No hay sesión activa")
                 
+                # 🔥 CORRECCIÓN: Declarar global PRIMERO
                 global bot_servidor_activo
                 
+                # Ahora sí podemos usar la variable
                 if not bot_servidor_activo:
                     raise Exception("El bot servidor no está activo")
                 
