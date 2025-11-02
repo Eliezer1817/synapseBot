@@ -1053,6 +1053,31 @@
                         Última operación: <span id="lastServerOperation">-</span>
                     </div>
                 </div>
+
+                <!-- 🔥 NUEVA SECCIÓN: Bot 24/7 en Servidor -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
+                    <button class="btn-trade" id="serverBotBtn" onclick="iniciarBotServidor()" style="background: #0066FF; box-shadow: 0 0 20px rgba(0, 102, 255, 0.5);">
+                        🚀 BOT 24/7 SERVIDOR
+                    </button>
+                    <button class="btn-trade" id="stopServerBotBtn" onclick="detenerBotServidor()" style="background: #FF4444; box-shadow: 0 0 20px rgba(255, 68, 68, 0.5);">
+                        🛑 DETENER BOT SERVIDOR
+                    </button>
+                </div>
+
+                <!-- 🔥 NUEVO: Estado del Bot Servidor -->
+                <div id="serverBotStatus" style="background: #1a1a1a; border: 2px solid #0066FF; border-radius: 8px; padding: 15px; margin-top: 15px; display: none;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                        <div style="width: 10px; height: 10px; background: #00FF00; border-radius: 50%; animation: pulseDot 2s infinite;"></div>
+                        <strong style="color: #00FF00;">🤖 BOT SERVIDOR ACTIVO 24/7</strong>
+                    </div>
+                    <div style="font-size: 13px; color: #CCCCCC;">
+                        ✅ Funciona con celular apagado<br>
+                        ⚡ Operando automáticamente cada <span id="serverInterval">5</span> minutos
+                    </div>
+                    <div style="margin-top: 10px; font-size: 12px; color: #999;">
+                        Última operación: <span id="lastServerOperation">-</span>
+                    </div>
+                </div>
                 
                 <div style="text-align: center; margin-top: 15px; font-size: 13px; color: #999;">
                     <strong>Bot Automático:</strong> Analiza y opera automáticamente cada intervalo<br>
