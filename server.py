@@ -712,7 +712,7 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                 if not session:
                     raise Exception("No hay sesión activa")
                 
-                global bot_servidor_activo
+                global bot_servidor_activo, bot_servidor_estadisticas
                 
                 if not bot_servidor_activo:
                     raise Exception("El bot servidor no está activo")
