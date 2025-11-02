@@ -776,6 +776,23 @@
             padding: 20px;
         }
 
+        /* 🔥 NUEVO: Estilos para Bot Servidor */
+        .server-status-active {
+            border-color: #00FF00 !important;
+            box-shadow: 0 0 25px rgba(0, 255, 0, 0.4) !important;
+            animation: serverPulse 2s infinite;
+        }
+
+        @keyframes serverPulse {
+            0%, 100% { box-shadow: 0 0 25px rgba(0, 255, 0, 0.4); }
+            50% { box-shadow: 0 0 35px rgba(0, 255, 0, 0.7); }
+        }
+
+        .server-status-inactive {
+            border-color: #666 !important;
+            background: #0a0a0a !important;
+        }
+
         @media (max-width: 768px) {
             .control-grid {
                 grid-template-columns: 1fr;
@@ -947,13 +964,25 @@
                         
                         <!-- Stop Loss Diario -->
                         <div class="control-item">
-                            <label class="control-label">Stop Loss Diario</label>
+                            <label class="control-label">Stop Loss Diario (%)</label>
                             <div class="slider-container">
                                 <input type="range" id="stopLossDiario" min="5" max="30" step="1" value="15">
                                 <span class="slider-value" id="stopLossValue">15%</span>
                             </div>
                             <div class="config-help">
                                 Detiene operaciones si se pierde este % del balance en un día
+                            </div>
+                        </div>
+
+                        <!-- Take Profit Diario -->
+                        <div class="control-item">
+                            <label class="control-label">Take Profit Diario (%)</label>
+                            <div class="slider-container">
+                                <input type="range" id="takeProfitDiario" min="5" max="50" step="1" value="20">
+                                <span class="slider-value" id="takeProfitValue">20%</span>
+                            </div>
+                            <div class="config-help">
+                                Detiene operaciones si se gana este % del balance en un día
                             </div>
                         </div>
                         
@@ -993,11 +1022,36 @@
 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
                     <button class="btn-trade" id="tradeBtn" onclick="iniciarBotAutomatico()">
-                        🤖 INICIAR BOT AUTOMÁTICO
+                        🤖 BOT CLIENTE (Móvil)
                     </button>
                     <button class="btn-trade" id="manualBtn" onclick="operacionManual()" style="background: #FF6600; box-shadow: 0 0 20px rgba(255, 102, 0, 0.5);">
                         🎯 OPERACIÓN MANUAL
                     </button>
+                </div>
+
+                <!-- 🔥 NUEVA SECCIÓN: Bot 24/7 en Servidor -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
+                    <button class="btn-trade" id="serverBotBtn" onclick="iniciarBotServidor()" style="background: #0066FF; box-shadow: 0 0 20px rgba(0, 102, 255, 0.5);">
+                        🚀 BOT 24/7 SERVIDOR
+                    </button>
+                    <button class="btn-trade" id="stopServerBotBtn" onclick="detenerBotServidor()" style="background: #FF4444; box-shadow: 0 0 20px rgba(255, 68, 68, 0.5);">
+                        🛑 DETENER BOT SERVIDOR
+                    </button>
+                </div>
+
+                <!-- 🔥 NUEVO: Estado del Bot Servidor -->
+                <div id="serverBotStatus" style="background: #1a1a1a; border: 2px solid #0066FF; border-radius: 8px; padding: 15px; margin-top: 15px; display: none;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                        <div style="width: 10px; height: 10px; background: #00FF00; border-radius: 50%; animation: pulseDot 2s infinite;"></div>
+                        <strong style="color: #00FF00;">🤖 BOT SERVIDOR ACTIVO 24/7</strong>
+                    </div>
+                    <div style="font-size: 13px; color: #CCCCCC;">
+                        ✅ Funciona con celular apagado<br>
+                        ⚡ Operando automáticamente cada <span id="serverInterval">5</span> minutos
+                    </div>
+                    <div style="margin-top: 10px; font-size: 12px; color: #999;">
+                        Última operación: <span id="lastServerOperation">-</span>
+                    </div>
                 </div>
                 
                 <div style="text-align: center; margin-top: 15px; font-size: 13px; color: #999;">
@@ -1060,6 +1114,7 @@
                 riesgo_porcentaje: 2.0,
                 max_perdidas_consecutivas: 3,
                 stop_loss_diario: 15,
+                take_profit_diario: 20,
                 monto_maximo: 10
             }
         };
@@ -1110,8 +1165,11 @@
                     restoreDashboard(data.user_data);
                     console.log('✅ Sesión restaurada');
                     
-                    // 🔥 NUEVO: Restaurar bot automáticamente sin confirmación
-                    restaurarBotAutomatico();
+                    // Sincronizar bot al cargar la página
+                    setTimeout(sincronizarBot, 1000);
+
+                    // Verificar estado del bot servidor
+                    setTimeout(verificarEstadoServidor, 2000);
                 } else {
                     clearSessionToken();
                     showLoginPanel();
@@ -1124,61 +1182,59 @@
             });
         }
 
-        // 🔥 NUEVA FUNCIÓN: Restaurar bot automáticamente
-        function restaurarBotAutomatico() {
+        // 🔥 NUEVA FUNCIÓN: Sincronizar y restaurar el bot
+        function sincronizarBot() {
+            // No hacer nada si el bot ya está activo en el estado de la app
+            if (appState.botRunning) {
+                return;
+            }
+
             const botConfig = localStorage.getItem('bot_config');
             if (!botConfig) return;
-            
+
             try {
                 const config = JSON.parse(botConfig);
-                
-                // Verificar que la configuración no sea muy antigua (menos de 1 hora)
                 const tiempoTranscurrido = Date.now() - config.timestamp;
-                const unaHora = 60 * 60 * 1000; // 1 hora en milisegundos
-                
+                const unaHora = 60 * 60 * 1000;
+
                 if (tiempoTranscurrido < unaHora) {
-                    console.log('🔄 Restaurando bot automático...');
-                    
-                    // Configurar la UI con los valores guardados
+                    console.log('🔄 Sincronizando y restaurando estado del bot...');
+
+                    // Limpiar intervalos viejos por si acaso
+                    if (appState.intervalId) clearInterval(appState.intervalId);
+                    if (appState.countdownId) clearInterval(appState.countdownId);
+
+                    // Restaurar UI
                     document.getElementById('accountMode').value = config.modo;
                     document.getElementById('intervalMinutes').value = config.intervalo / 60000;
-                    
-                    // Si había monto fijo, restaurarlo
                     if (config.monto !== null) {
                         document.getElementById('tipoMonto').value = 'fijo';
                         document.getElementById('montoFijoContainer').style.display = 'block';
                         document.getElementById('tradeAmount').value = config.monto;
                     }
-                    
-                    // Iniciar el bot automáticamente después de un breve delay
-                    setTimeout(() => {
-                        console.log('🚀 Iniciando bot automáticamente...');
-                        
-                        // Configurar el estado del bot como running
-                        appState.botRunning = true;
-                        mostrarBannerBot();
-                        
-                        // Programar operaciones automáticas con el intervalo guardado
-                        appState.intervalId = setInterval(() => {
-                            ejecutarOperacionAutomatica(config.monto);
-                        }, config.intervalo);
-                        
-                        // Iniciar countdown con persistencia
-                        iniciarCountdown(config.intervalo);
-                        
-                        // Mostrar notificación
-                        mostrarNotificacionBotRestaurado();
-                        
-                    }, 1000); // 1 segundo de delay
-                    
+
+                    // Actualizar estado de la app y UI
+                    appState.botRunning = true;
+                    mostrarBannerBot();
+
+                    // Reiniciar el ciclo de operaciones
+                    appState.intervalId = setInterval(() => {
+                        ejecutarOperacionAutomatica(config.monto);
+                    }, config.intervalo);
+
+                    // Reiniciar el countdown con persistencia
+                    iniciarCountdown(config.intervalo);
+
+                    mostrarNotificacionBotRestaurado();
                 } else {
-                    // Configuración muy antigua, limpiar
-                    console.log('🧹 Configuración de bot muy antigua, limpiando...');
+                    console.log('🧹 Configuración de bot expirada, limpiando...');
                     localStorage.removeItem('bot_config');
+                    localStorage.removeItem('bot_countdown');
                 }
             } catch (e) {
-                console.error('❌ Error restaurando bot:', e);
+                console.error('❌ Error en sincronizarBot:', e);
                 localStorage.removeItem('bot_config');
+                localStorage.removeItem('bot_countdown');
             }
         }
 
@@ -1255,6 +1311,9 @@
 
         // Logout mejorado
         async function logout() {
+            // Detener monitor de servidor
+            document.getElementById('serverBotStatus').style.display = 'none';
+            
             if (!confirm('¿Cerrar sesión?')) return;
 
             if (appState.botRunning) {
@@ -1285,6 +1344,7 @@
             // Configurar sliders
             const riesgoSlider = document.getElementById('riesgoPorcentaje');
             const stopLossSlider = document.getElementById('stopLossDiario');
+            const takeProfitSlider = document.getElementById('takeProfitDiario');
             
             riesgoSlider.addEventListener('input', function() {
                 document.getElementById('riesgoValue').textContent = this.value + '%';
@@ -1295,6 +1355,11 @@
             stopLossSlider.addEventListener('input', function() {
                 document.getElementById('stopLossValue').textContent = this.value + '%';
                 appState.riesgoConfig.stop_loss_diario = parseInt(this.value);
+            });
+
+            takeProfitSlider.addEventListener('input', function() {
+                document.getElementById('takeProfitValue').textContent = this.value + '%';
+                appState.riesgoConfig.take_profit_diario = parseInt(this.value);
             });
             
             // Configurar otros inputs de riesgo
@@ -1318,6 +1383,14 @@
             
             // Verificar sesión al cargar
             checkSession();
+
+            // Sincronizar bot cuando la pestaña vuelve a estar visible (para móviles)
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') {
+                    console.log('Pestaña visible de nuevo, verificando estado del bot...');
+                    sincronizarBot();
+                }
+            });
         });
 
         // ==================== LOGIN ====================
@@ -1510,6 +1583,154 @@ No se ejecutarán más operaciones hoy.`;
             }
         }
 
+        // ==================== BOT SERVIDOR 24/7 ====================
+
+        // 🔥 NUEVO: Iniciar bot en servidor
+        async function iniciarBotServidor() {
+            const serverBotBtn = document.getElementById('serverBotBtn');
+            const modo = document.getElementById('accountMode').value;
+            const intervalo = parseInt(document.getElementById('intervalMinutes').value);
+            const tipoMonto = document.getElementById('tipoMonto').value;
+            
+            let monto = null;
+            if (tipoMonto === 'fijo') {
+                monto = parseFloat(document.getElementById('tradeAmount').value);
+                if (monto < 1) {
+                    alert('El monto mínimo es $1');
+                    return;
+                }
+            }
+
+            if (!confirm(`🚀 ¿INICIAR BOT 24/7 EN SERVIDOR?\n\n• Modo: ${modo.toUpperCase()}\n• Intervalo: ${intervalo} minutos\n• Riesgo: ${appState.riesgoConfig.riesgo_porcentaje}%\n\n✅ Funcionará aunque apagues el celular`)) {
+                return;
+            }
+
+            serverBotBtn.disabled = true;
+            serverBotBtn.textContent = '⏳ INICIANDO...';
+
+            try {
+                const res = await fetch('/iniciar_bot_servidor', {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({
+                        modo: modo,
+                        intervalo: intervalo,
+                        monto: monto,
+                        riesgo_porcentaje: appState.riesgoConfig.riesgo_porcentaje,
+                        max_perdidas_consecutivas: appState.riesgoConfig.max_perdidas_consecutivas,
+                        stop_loss_diario: appState.riesgoConfig.stop_loss_diario,
+                        take_profit_diario: appState.riesgoConfig.take_profit_diario,
+                        monto_maximo: appState.riesgoConfig.monto_maximo
+                    })
+                });
+
+                const data = await res.json();
+
+                if (!res.ok || !data.success) {
+                    throw new Error(data.error || 'Error al iniciar bot en servidor');
+                }
+
+                // Mostrar estado del bot servidor
+                document.getElementById('serverBotStatus').style.display = 'block';
+                document.getElementById('serverInterval').textContent = intervalo;
+                document.getElementById('lastServerOperation').textContent = new Date().toLocaleTimeString();
+                
+                alert('✅ Bot 24/7 iniciado en servidor\n\n🤖 Ahora funciona aunque:\n• Apagues el celular\n• Cierres el navegador\n• Estés sin internet');
+
+                // Iniciar monitor de estado
+                iniciarMonitorServidor();
+
+            } catch (err) {
+                alert('❌ Error: ' + err.message);
+            } finally {
+                serverBotBtn.disabled = false;
+                serverBotBtn.textContent = '🚀 BOT 24/7 SERVIDOR';
+            }
+        }
+
+        // 🔥 NUEVO: Detener bot en servidor
+        async function detenerBotServidor() {
+            if (!confirm('¿Detener el bot 24/7 del servidor?')) return;
+
+            try {
+                const res = await fetch('/detener_bot_servidor', {
+                    method: 'POST',
+                    headers: getAuthHeaders()
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    document.getElementById('serverBotStatus').style.display = 'none';
+                    alert('🛑 Bot servidor detenido');
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (err) {
+                alert('❌ Error: ' + err.message);
+            }
+        }
+
+        // 🔥 NUEVO: Monitor de estado del bot servidor
+        function iniciarMonitorServidor() {
+            // Verificar estado cada 30 segundos
+            setInterval(async () => {
+                try {
+                    const res = await fetch('/estado_bot_servidor', {
+                        headers: getAuthHeaders()
+                    });
+                    
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.bot_activo) {
+                            // Actualizar última operación
+                            document.getElementById('lastServerOperation').textContent = 
+                                new Date().toLocaleTimeString();
+                            
+                            // Actualizar estadísticas si hay nuevas
+                            if (data.ultima_operacion) {
+                                // Aquí puedes procesar las operaciones del servidor
+                                console.log('📊 Operación del servidor:', data.ultima_operacion);
+                            }
+                        } else {
+                            // Bot detenido en servidor
+                            document.getElementById('serverBotStatus').style.display = 'none';
+                        }
+                    }
+                } catch (err) {
+                    console.log('⚠️ No se pudo verificar estado del servidor');
+                }
+            }, 30000); // 30 segundos
+        }
+
+        // 🔥 NUEVO: Verificar estado al cargar la página
+        async function verificarEstadoServidor() {
+            try {
+                const res = await fetch('/estado_bot_servidor', {
+                    headers: getAuthHeaders()
+                });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.bot_activo) {
+                        // Bot activo en servidor, mostrar estado
+                        document.getElementById('serverBotStatus').style.display = 'block';
+                        document.getElementById('serverInterval').textContent = data.intervalo || 5;
+                        document.getElementById('lastServerOperation').textContent = 
+                            data.ultima_operacion_timestamp ? 
+                            new Date(data.ultima_operacion_timestamp).toLocaleTimeString() : '-';
+                        
+                        // Iniciar monitor
+                        iniciarMonitorServidor();
+                        
+                        console.log('✅ Bot servidor encontrado activo');
+                    }
+                }
+            } catch (err) {
+                console.log('ℹ️ No hay bot activo en servidor');
+            }
+        }
+
         // ==================== BOT AUTOMÁTICO CON PERSISTENCIA ====================
 
         // Iniciar bot automático CON PERSISTENCIA (versión mejorada)
@@ -1590,6 +1811,22 @@ No se ejecutarán más operaciones hoy.`;
                         actualizarMonitorRiesgo(data.estadisticas_riesgo);
                     }
 
+                    // Si la operación no se ejecutó, verificar por qué
+                    if (data.ejecutado === false) {
+                        if (data.decision === 'STOP_LOSS') {
+                            console.log('🛑 STOP LOSS alcanzado. Deteniendo el bot automáticamente.');
+                            alert(`🛑 STOP LOSS DIARIO ALCANZADO\n\nProfit hoy: $${(data.estadisticas_riesgo?.profit_diario || 0).toFixed(2)}\n\nEl bot se detendrá automáticamente.`);
+                            detenerBot(true); // Detención forzada
+                            return; // Salir de la función
+                        }
+                        if (data.decision === 'TAKE_PROFIT') {
+                            console.log('✅ TAKE PROFIT alcanzado. Deteniendo el bot automáticamente.');
+                            alert(`✅ TAKE PROFIT DIARIO ALCANZADO\n\nProfit hoy: $${(data.estadisticas_riesgo?.profit_diario || 0).toFixed(2)}\n\nEl bot se detendrá automáticamente.`);
+                            detenerBot(true); // Detención forzada
+                            return; // Salir de la función
+                        }
+                    }
+
                     // Solo agregar al historial si se ejecutó
                     if (data.ejecutado) {
                         agregarTradeHistorial(data);
@@ -1610,6 +1847,8 @@ No se ejecutarán más operaciones hoy.`;
                             }
                         }
                     }
+                } else {
+                    console.error('Error en la respuesta del servidor (operación automática):', data.error);
                 }
 
             } catch (err) {
@@ -1618,28 +1857,28 @@ No se ejecutarán más operaciones hoy.`;
         }
 
         // Detener bot CON PERSISTENCIA
-        function detenerBot() {
+        function detenerBot(forzar = false) {
             // Limpiar countdown del localStorage
             localStorage.removeItem('bot_countdown');
-            
-            if (confirm('¿Estás seguro de detener el bot automático?')) {
+
+            const stop = () => {
                 appState.botRunning = false;
-                
                 if (appState.intervalId) {
                     clearInterval(appState.intervalId);
                     appState.intervalId = null;
                 }
-                
                 if (appState.countdownId) {
                     clearInterval(appState.countdownId);
                     appState.countdownId = null;
                 }
-                
                 ocultarBannerBot();
                 document.getElementById('tradeBtn').textContent = '🚀 INICIAR BOT AUTOMÁTICO';
-                
-                // Limpiar configuración del bot
                 localStorage.removeItem('bot_config');
+                console.log('🤖 Bot detenido.');
+            };
+            
+            if (forzar || confirm('¿Estás seguro de detener el bot automático?')) {
+                stop();
             }
         }
 
