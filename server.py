@@ -32,6 +32,8 @@ bot_servidor_estadisticas = {
 }
 
 class SessionManager:
+    SESSION_TIMEOUT = 24 * 3600  # 24 horas
+    
     @staticmethod
     def generate_token():
         return str(uuid.uuid4())
@@ -52,8 +54,14 @@ class SessionManager:
     @staticmethod
     def get_session(token):
         if token in active_sessions:
-            active_sessions[token]['last_activity'] = time.time()
-            return active_sessions[token]
+            session = active_sessions[token]
+            # Verificar expiración
+            if time.time() - session['last_activity'] > SessionManager.SESSION_TIMEOUT:
+                SessionManager.delete_session(token)
+                return None
+            
+            session['last_activity'] = time.time()
+            return session
         return None
     
     @staticmethod
@@ -69,24 +77,47 @@ class SessionManager:
         if email in session_tokens:
             token = session_tokens[email]
             SessionManager.delete_session(token)
-
-def get_profile_data(iq):
-    """Obtiene datos del perfil usando los métodos correctos de la API"""
-    try:
-        profile = iq.get_profile_ansyc()
-        time.sleep(1)
-        return profile
-    except:
-        return {}
+    
+    @staticmethod
+    def cleanup_expired_sessions():
+        """Limpiar sesiones expiradas"""
+        current_time = time.time()
+        expired_tokens = []
+        
+        for token, session_data in active_sessions.items():
+            if current_time - session_data['last_activity'] > SessionManager.SESSION_TIMEOUT:
+                expired_tokens.append(token)
+        
+        for token in expired_tokens:
+            SessionManager.delete_session(token)
+        
+        if expired_tokens:
+            print(f"🧹 Sesiones expiradas limpiadas: {len(expired_tokens)}")
 
 def get_authenticated_session(handler):
-    """Obtener sesión autenticada desde headers"""
-    auth_header = handler.headers.get('Authorization', '')
-    if not auth_header.startswith('Bearer '):
+    """Obtener sesión autenticada desde headers con mejor manejo de errores"""
+    try:
+        auth_header = handler.headers.get('Authorization', '')
+        if not auth_header.startswith('Bearer '):
+            print("❌ No se encontró header Authorization")
+            return None
+        
+        token = auth_header.replace('Bearer ', '').strip()
+        if not token:
+            print("❌ Token vacío")
+            return None
+        
+        session = SessionManager.get_session(token)
+        if session:
+            print(f"✅ Sesión válida para: {session['email']}")
+            return session
+        else:
+            print("❌ Sesión no encontrada o expirada")
+            return None
+            
+    except Exception as e:
+        print(f"❌ Error en autenticación: {e}")
         return None
-    
-    token = auth_header.replace('Bearer ', '').strip()
-    return SessionManager.get_session(token)
 
 def obtener_balances_reales(iq):
     """Obtiene balances REALES de las cuentas demo y real"""
@@ -315,31 +346,53 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
             return
 
         elif self.path == '/check_session':
-            session = get_authenticated_session(self)
-            if session:
-                # Obtener balances actualizados
-                real_balance, demo_balance, real_id, demo_id = obtener_balances_reales(session['iq'])
-                
-                self.send_response(200)
+            try:
+                session = get_authenticated_session(self)
+                if session:
+                    # Obtener balances actualizados
+                    real_balance, demo_balance, real_id, demo_id = obtener_balances_reales(session['iq'])
+                    
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'success': True,
+                        'session_valid': True,
+                        'user_data': {
+                            'user': {'username': session['email'].split('@')[0], 'email': session['email']},
+                            'real': {'balance': real_balance, 'accountId': real_id or 'real_123'},
+                            'practice': {'balance': demo_balance, 'accountId': demo_id or 'demo_123'}
+                        }
+                    }).encode('utf-8'))
+                else:
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'success': True,
+                        'session_valid': False,
+                        'message': 'Sesión no válida o expirada'
+                    }).encode('utf-8'))
+            except Exception as e:
+                print(f"❌ Error en check_session: {e}")
+                self.send_response(500)
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({
-                    'success': True,
-                    'session_valid': True,
-                    'user_data': {
-                        'user': {'username': session['email'].split('@')[0], 'email': session['email']},
-                        'real': {'balance': real_balance, 'accountId': real_id or 'real_123'},
-                        'practice': {'balance': demo_balance, 'accountId': demo_id or 'demo_123'}
-                    }
+                    'success': False,
+                    'error': str(e)
                 }).encode('utf-8'))
-            else:
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({
-                    'success': True,
-                    'session_valid': False
-                }).encode('utf-8'))
+            return
+
+        elif self.path == '/debug_sessions':
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                'active_sessions_count': len(active_sessions),
+                'session_tokens_count': len(session_tokens),
+                'active_sessions': list(active_sessions.keys())[:5]  # Primeros 5 tokens
+            }).encode('utf-8'))
             return
         
         # Servir archivos estáticos
@@ -526,7 +579,16 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                 try:
                     session = get_authenticated_session(self)
                     if not session:
-                        raise Exception("No hay sesión activa. Inicie sesión primero.")
+                        # ✅ MEJOR MENSAJE DE ERROR
+                        self.send_response(401)
+                        self.send_header('Content-type', 'application/json')
+                        self.end_headers()
+                        self.wfile.write(json.dumps({
+                            'success': False,
+                            'error': 'Sesión no válida. Por favor, inicie sesión nuevamente.',
+                            'session_expired': True
+                        }).encode('utf-8'))
+                        return
                     
                     content_length = int(self.headers.get('Content-Length', 0))
                     post_data = self.rfile.read(content_length) if content_length > 0 else b'{}'
@@ -805,53 +867,179 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
 
 
 class ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
+
+
     daemon_threads = True
 
 
+
+
+
+def cleanup_sessions_periodically():
+
+
+    """Ejecutar limpieza de sesiones cada hora"""
+
+
+    while True:
+
+
+        time.sleep(3600)  # 1 hora
+
+
+        SessionManager.cleanup_expired_sessions()
+
+
+
+
+
 def run_server(port=PORT):
+
+
     # ✅ CORRECCIÓN CRÍTICA: Declaración global al inicio de la función
+
+
     global bot_servidor_activo, bot_servidor_thread
+
+
     
+
+
+    # Iniciar limpieza de sesiones
+
+
+    cleanup_thread = threading.Thread(target=cleanup_sessions_periodically)
+
+
+    cleanup_thread.daemon = True
+
+
+    cleanup_thread.start()
+
+
+    
+
+
     server_address = ('', port)
+
+
     
+
+
     try:
+
+
         httpd = ThreadedHTTPServer(server_address, MyHttpRequestHandler)
+
+
         
+
+
         print("\n" + "="*70)
+
+
         print(f"🚀 SERVIDOR HTTP INICIADO")
+
+
         print("="*70)
+
+
         print(f"🌐 URL: http://localhost:{port}")
+
+
         print(f"📂 Directorio: {CWD}")
+
+
         print(f"🔐 Sistema de sesiones activado")
+
+
         print(f"💰 Balances REALES activados")
+
+
         print("="*70)
+
+
         print("\n✅ Servidor listo para recibir conexiones")
+
+
         print("⌨️  Presiona Ctrl+C para detener\n")
+
+
         
+
+
         httpd.serve_forever()
+
+
         
+
+
     except OSError as e:
+
+
         if "address already in use" in str(e).lower():
+
+
             print(f"\n❌ ERROR: El puerto {port} ya está en uso")
+
+
             print(f"💡 Solución: Cambia PORT en server.py o cierra el proceso que usa el puerto")
+
+
         else:
+
+
             print(f"\n❌ ERROR: {e}\n")
+
+
             traceback.print_exc()
+
+
     except KeyboardInterrupt:
+
+
         print("\n\n🛑 Servidor detenido")
+
+
         # Detener bot servidor si está activo
+
+
         if bot_servidor_activo:
+
+
             print("🛑 Deteniendo bot servidor...")
+
+
             bot_servidor_activo = False
+
+
             if bot_servidor_thread and bot_servidor_thread.is_alive():
+
+
                 bot_servidor_thread.join(timeout=10)
+
+
         
+
+
         # Limpiar todas las sesiones
+
+
         active_sessions.clear()
+
+
         session_tokens.clear()
+
+
         httpd.server_close()
+
+
     except Exception as e:
+
+
         print(f"\n❌ ERROR INESPERADO: {e}\n")
+
+
         traceback.print_exc()
 
 
