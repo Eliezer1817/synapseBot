@@ -377,402 +377,431 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
         # ✅ CORRECCIÓN CRÍTICA: Declaraciones globales AL INICIO del método
         global bot_servidor_activo, bot_servidor_config, bot_servidor_thread, bot_servidor_estadisticas
         
-        if self.path == '/login':
-            try:
-                content_length = int(self.headers.get('Content-Length', 0))
-                if content_length == 0:
-                    raise Exception("Request body vacío")
-                
-                post_data = self.rfile.read(content_length)
-                credentials = json.loads(post_data.decode('utf-8'))
-                
-                email = credentials.get('email', '').strip()
-                password = credentials.get('password', '').strip()
-                
-                if not email or not password:
-                    raise Exception("Email y password son requeridos")
-                
-                print(f"\n{'='*70}")
-                print(f"🔥 LOGIN REQUEST")
-                print(f"{'='*70}")
-                print(f"📧 Email: {email}")
-                print(f"{'='*70}\n")
+        try:
+            if self.path == '/login':
+                try:
+                    content_length = int(self.headers.get('Content-Length', 0))
+                    if content_length == 0:
+                        raise Exception("Request body vacío")
+                    
+                    post_data = self.rfile.read(content_length)
+                    credentials = json.loads(post_data.decode('utf-8'))
+                    
+                    email = credentials.get('email', '').strip()
+                    password = credentials.get('password', '').strip()
+                    
+                    if not email or not password:
+                        raise Exception("Email y password son requeridos")
+                    
+                    print(f"\n{'='*70}")
+                    print(f"🔥 LOGIN REQUEST")
+                    print(f"{'='*70}")
+                    print(f"📧 Email: {email}")
+                    print(f"{'='*70}\n")
 
-                # Verificar si ya hay sesión activa
-                if email in session_tokens:
-                    existing_token = session_tokens[email]
-                    SessionManager.delete_session(existing_token)
-                    print(f"🔄 Sesión anterior eliminada para {email}")
+                    # Verificar si ya hay sesión activa
+                    if email in session_tokens:
+                        existing_token = session_tokens[email]
+                        SessionManager.delete_session(existing_token)
+                        print(f"🔄 Sesión anterior eliminada para {email}")
 
-                # Conectar a IQ Option
-                print("⏳ Conectando a IQ Option...")
-                iq_session = _connect(email, password)
-                print("✅ Conexión establecida.")
-                
-                # Obtener balances REALES
-                real_balance, demo_balance, real_id, demo_id = obtener_balances_reales(iq_session)
-                
-                # Crear nueva sesión
-                token = SessionManager.create_session(email, iq_session)
-                print(f"🔑 Token de sesión generado: {token[:8]}...")
+                    # Conectar a IQ Option
+                    print("⏳ Conectando a IQ Option...")
+                    iq_session = _connect(email, password)
+                    print("✅ Conexión establecida.")
+                    
+                    # Obtener balances REALES
+                    real_balance, demo_balance, real_id, demo_id = obtener_balances_reales(iq_session)
+                    
+                    # Crear nueva sesión
+                    token = SessionManager.create_session(email, iq_session)
+                    print(f"🔑 Token de sesión generado: {token[:8]}...")
 
-                # Respuesta exitosa con balances reales
-                response_data = {
-                    "success": True,
-                    "session_token": token,
-                    "data": {
-                        "user": {
-                            "username": email.split("@")[0],
-                            "email": email,
-                            "userId": "user_123"
-                        },
-                        "real": {
-                            "balance": real_balance,
-                            "accountId": real_id or "real_123",
-                            "currency": "USD",
-                            "type": "REAL"
-                        },
-                        "practice": {
-                            "balance": demo_balance,
-                            "accountId": demo_id or "demo_123", 
-                            "currency": "USD",
-                            "type": "PRACTICE"
+                    # Respuesta exitosa con balances reales
+                    response_data = {
+                        "success": True,
+                        "session_token": token,
+                        "data": {
+                            "user": {
+                                "username": email.split("@")[0],
+                                "email": email,
+                                "userId": "user_123"
+                            },
+                            "real": {
+                                "balance": real_balance,
+                                "accountId": real_id or "real_123",
+                                "currency": "USD",
+                                "type": "REAL"
+                            },
+                            "practice": {
+                                "balance": demo_balance,
+                                "accountId": demo_id or "demo_123", 
+                                "currency": "USD",
+                                "type": "PRACTICE"
+                            }
                         }
                     }
-                }
 
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(response_data).encode('utf-8'))
-                
-                print(f"✅ LOGIN EXITOSO para {email}")
-                print(f"💰 Balances - Real: ${real_balance}, Demo: ${demo_balance}\n")
-
-            except Exception as e:
-                error_msg = str(e)
-                print(f"❌ ERROR en login: {error_msg}")
-                traceback.print_exc()
-                
-                self.send_response(500)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({
-                    'success': False, 
-                    'error': error_msg
-                }).encode('utf-8'))
-        
-        elif self.path == '/logout':
-            try:
-                session = get_authenticated_session(self)
-                if session:
-                    SessionManager.delete_session_by_email(session['email'])
-                    print(f"✅ Sesión cerrada para {session['email']}")
-                
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({
-                    'success': True,
-                    'message': 'Sesión cerrada correctamente'
-                }).encode('utf-8'))
-                
-            except Exception as e:
-                error_msg = str(e)
-                print(f"❌ ERROR en logout: {error_msg}")
-                
-                self.send_response(500)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({
-                    'success': False,
-                    'error': error_msg
-                }).encode('utf-8'))
-        
-        elif self.path == '/force_logout':
-            try:
-                content_length = int(self.headers.get('Content-Length', 0))
-                if content_length > 0:
-                    post_data = self.rfile.read(content_length)
-                    data = json.loads(post_data.decode('utf-8'))
-                    email = data.get('email', '').strip()
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps(response_data).encode('utf-8'))
                     
-                    if email:
-                        SessionManager.delete_session_by_email(email)
-                        print(f"🔄 Sesión forzada cerrada para {email}")
-                
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({
-                    'success': True,
-                    'message': 'Sesiones cerradas en todos los dispositivos'
-                }).encode('utf-8'))
-                
-            except Exception as e:
-                error_msg = str(e)
-                print(f"❌ ERROR en force_logout: {error_msg}")
-                
-                self.send_response(500)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({
-                    'success': False,
-                    'error': error_msg
-                }).encode('utf-8'))
-        
-        elif self.path == '/operar':
-            try:
-                session = get_authenticated_session(self)
-                if not session:
-                    raise Exception("No hay sesión activa. Inicie sesión primero.")
-                
-                content_length = int(self.headers.get('Content-Length', 0))
-                post_data = self.rfile.read(content_length) if content_length > 0 else b'{}'
-                config = json.loads(post_data.decode('utf-8'))
-                
-                modo = config.get('modo', 'demo')
-                monto = config.get('monto')
-                ejecutar_auto = config.get('ejecutar_auto', False)
-                forzar_operacion = config.get('forzar_operacion', False)
-                
-                print(f"\n{'='*70}")
-                print(f"🎯 OPERACIÓN SOLICITADA")
-                print(f"{'='*70}")
-                print(f"Usuario: {session['email']}")
-                print(f"Modo: {modo.upper()}")
-                print(f"Monto: {'AUTO' if monto is None else f'${monto}'}")
-                print(f"Auto: {'SÍ' if ejecutar_auto else 'NO'}")
-                print(f"Forzar: {'SÍ' if forzar_operacion else 'NO'}")
-                print(f"{'='*70}\n")
-                
-                # EJECUTAR OPERACIÓN REAL con el módulo operar
-                resultado = ejecutar_operacion(
-                    session['iq'],
-                    modo=modo,
-                    monto=monto,
-                    ejecutar_auto=ejecutar_auto,
-                    forzar_operacion=forzar_operacion,
-                    config_riesgo={
-                        'riesgo_porcentaje': config.get('riesgo_porcentaje', 2.0),
-                        'max_perdidas_consecutivas': config.get('max_perdidas_consecutivas', 3),
-                        'stop_loss_diario': config.get('stop_loss_diario', 15),
-                        'monto_maximo': config.get('monto_maximo', 10)
-                    }
-                )
-                
-                # Obtener balances actualizados después de la operación
-                real_balance, demo_balance, real_id, demo_id = obtener_balances_reales(session['iq'])
-                
-                # Agregar balances actualizados al resultado
-                resultado['balances_actualizados'] = {
-                    'real': real_balance,
-                    'demo': demo_balance
-                }
-                
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(resultado).encode('utf-8'))
-                
-                print(f"✅ Operación REAL completada\n")
-                
-            except Exception as e:
-                error_msg = str(e)
-                print(f"❌ ERROR en operación: {error_msg}")
-                traceback.print_exc()
-                
-                self.send_response(500)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({
-                    'success': False,
-                    'error': error_msg
-                }).encode('utf-8'))
-        
-        elif self.path == '/iniciar_bot':
-            try:
-                session = get_authenticated_session(self)
-                if not session:
-                    raise Exception("No hay sesión activa")
-                
-                content_length = int(self.headers.get('Content-Length', 0))
-                post_data = self.rfile.read(content_length) if content_length > 0 else b'{}'
-                config = json.loads(post_data.decode('utf-8'))
-                
-                print(f"🤖 Bot iniciado para {session['email']}")
-                
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({
-                    'success': True,
-                    'message': 'Bot automático iniciado',
-                    'interval_minutes': config.get('interval_minutes', 5)
-                }).encode('utf-8'))
-                
-            except Exception as e:
-                error_msg = str(e)
-                print(f"❌ ERROR iniciando bot: {error_msg}")
-                
-                self.send_response(500)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({
-                    'success': False,
-                    'error': error_msg
-                }).encode('utf-8'))
-        
-        elif self.path == '/detener_bot':
-            try:
-                session = get_authenticated_session(self)
-                if not session:
-                    raise Exception("No hay sesión activa")
-                
-                print(f"🛑 Bot detenido para {session['email']}")
-                
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({
-                    'success': True,
-                    'message': 'Bot automático detenido'
-                }).encode('utf-8'))
-                
-            except Exception as e:
-                error_msg = str(e)
-                print(f"❌ ERROR deteniendo bot: {error_msg}")
-                
-                self.send_response(500)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({
-                    'success': False,
-                    'error': error_msg
-                }).encode('utf-8'))
-        
-        # 🔥 NUEVO: Endpoints para bot servidor 24/7
-        
-        elif self.path == '/iniciar_bot_servidor':
-            try:
-                # ✅ YA NO NECESITAMOS global aquí porque está al inicio del método
-                session = get_authenticated_session(self)
-                if not session:
-                    raise Exception("No hay sesión activa")
-                
-                if bot_servidor_activo:
-                    raise Exception("El bot servidor ya está activo")
-                
-                content_length = int(self.headers.get('Content-Length', 0))
-                post_data = self.rfile.read(content_length) if content_length > 0 else b'{}'
-                config = json.loads(post_data.decode('utf-8'))
-                
-                # Guardar configuración
-                bot_servidor_config = config
-                bot_servidor_activo = True
-                
-                # Reiniciar estadísticas
-                bot_servidor_estadisticas = {
-                    'operaciones_ejecutadas': 0,
-                    'operaciones_exitosas': 0,
-                    'ganancia_total': 0.0,
-                    'ultima_operacion_timestamp': None
-                }
-                
-                # Iniciar thread del bot
-                bot_servidor_thread = threading.Thread(target=ejecutar_bot_servidor)
-                bot_servidor_thread.daemon = True
-                bot_servidor_thread.start()
-                
-                print(f"🚀 BOT SERVIDOR INICIADO para {session['email']}")
-                print(f"📋 Configuración: {config}")
-                
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({
-                    'success': True,
-                    'message': 'Bot 24/7 iniciado en servidor',
-                    'config': config
-                }).encode('utf-8'))
-                
-            except Exception as e:
-                error_msg = str(e)
-                print(f"❌ ERROR iniciando bot servidor: {error_msg}")
-                
-                self.send_response(500)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({
-                    'success': False,
-                    'error': error_msg
-                }).encode('utf-8'))
-        
-        elif self.path == '/detener_bot_servidor':
-            try:
-                # ✅ YA NO NECESITAMOS global aquí porque está al inicio del método
-                session = get_authenticated_session(self)
-                if not session:
-                    raise Exception("No hay sesión activa")
-                
-                if not bot_servidor_activo:
-                    raise Exception("El bot servidor no está activo")
-                
-                bot_servidor_activo = False
-                
-                print(f"🛑 BOT SERVIDOR DETENIDO por {session['email']}")
-                
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({
-                    'success': True,
-                    'message': 'Bot servidor detenido',
-                    'estadisticas_finales': bot_servidor_estadisticas
-                }).encode('utf-8'))
-                
-            except Exception as e:
-                error_msg = str(e)
-                print(f"❌ ERROR deteniendo bot servidor: {error_msg}")
-                
-                self.send_response(500)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({
-                    'success': False,
-                    'error': error_msg
-                }).encode('utf-8'))
+                    print(f"✅ LOGIN EXITOSO para {email}")
+                    print(f"💰 Balances - Real: ${real_balance}, Demo: ${demo_balance}\n")
 
-        elif self.path == '/reset_riesgo':
+                except Exception as e:
+                    error_msg = str(e)
+                    print(f"❌ ERROR en login: {error_msg}")
+                    traceback.print_exc()
+                    
+                    self.send_response(500)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'success': False, 
+                        'error': error_msg
+                    }).encode('utf-8'))
+            
+            elif self.path == '/logout':
+                try:
+                    session = get_authenticated_session(self)
+                    if session:
+                        SessionManager.delete_session_by_email(session['email'])
+                        print(f"✅ Sesión cerrada para {session['email']}")
+                    
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'success': True,
+                        'message': 'Sesión cerrada correctamente'
+                    }).encode('utf-8'))
+                    
+                except Exception as e:
+                    error_msg = str(e)
+                    print(f"❌ ERROR en logout: {error_msg}")
+                    
+                    self.send_response(500)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'success': False,
+                        'error': error_msg
+                    }).encode('utf-8'))
+            
+            elif self.path == '/force_logout':
+                try:
+                    content_length = int(self.headers.get('Content-Length', 0))
+                    if content_length > 0:
+                        post_data = self.rfile.read(content_length)
+                        data = json.loads(post_data.decode('utf-8'))
+                        email = data.get('email', '').strip()
+                        
+                        if email:
+                            SessionManager.delete_session_by_email(email)
+                            print(f"🔄 Sesión forzada cerrada para {email}")
+                    
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'success': True,
+                        'message': 'Sesiones cerradas en todos los dispositivos'
+                    }).encode('utf-8'))
+                    
+                except Exception as e:
+                    error_msg = str(e)
+                    print(f"❌ ERROR en force_logout: {error_msg}")
+                    
+                    self.send_response(500)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'success': False,
+                        'error': error_msg
+                    }).encode('utf-8'))
+            
+            elif self.path == '/operar':
+                try:
+                    session = get_authenticated_session(self)
+                    if not session:
+                        raise Exception("No hay sesión activa. Inicie sesión primero.")
+                    
+                    content_length = int(self.headers.get('Content-Length', 0))
+                    post_data = self.rfile.read(content_length) if content_length > 0 else b'{}'
+                    config = json.loads(post_data.decode('utf-8'))
+                    
+                    modo = config.get('modo', 'demo')
+                    monto = config.get('monto')
+                    ejecutar_auto = config.get('ejecutar_auto', False)
+                    forzar_operacion = config.get('forzar_operacion', False)
+                    
+                    print(f"\n{'='*70}")
+                    print(f"🎯 OPERACIÓN SOLICITADA")
+                    print(f"{'='*70}")
+                    print(f"Usuario: {session['email']}")
+                    print(f"Modo: {modo.upper()}")
+                    print(f"Monto: {'AUTO' if monto is None else f'${monto}'}")
+                    print(f"Auto: {'SÍ' if ejecutar_auto else 'NO'}")
+                    print(f"Forzar: {'SÍ' if forzar_operacion else 'NO'}")
+                    print(f"{'='*70}\n")
+                    
+                    # EJECUTAR OPERACIÓN REAL con el módulo operar
+                    resultado = ejecutar_operacion(
+                        session['iq'],
+                        modo=modo,
+                        monto=monto,
+                        ejecutar_auto=ejecutar_auto,
+                        forzar_operacion=forzar_operacion,
+                        config_riesgo={
+                            'riesgo_porcentaje': config.get('riesgo_porcentaje', 2.0),
+                            'max_perdidas_consecutivas': config.get('max_perdidas_consecutivas', 3),
+                            'stop_loss_diario': config.get('stop_loss_diario', 15),
+                            'monto_maximo': config.get('monto_maximo', 10)
+                        }
+                    )
+                    
+                    # Obtener balances actualizados después de la operación
+                    real_balance, demo_balance, real_id, demo_id = obtener_balances_reales(session['iq'])
+                    
+                    # Agregar balances actualizados al resultado
+                    resultado['balances_actualizados'] = {
+                        'real': real_balance,
+                        'demo': demo_balance
+                    }
+                    
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    
+                    # ✅ CORRECCIÓN: Manejar BrokenPipeError específicamente
+                    try:
+                        self.wfile.write(json.dumps(resultado).encode('utf-8'))
+                        print(f"✅ Operación REAL completada y respuesta enviada\n")
+                    except BrokenPipeError:
+                        print("⚠️ Cliente cerró la conexión antes de recibir la respuesta completa")
+                        # No hacer nada, el cliente ya se desconectó
+                    
+                except Exception as e:
+                    error_msg = str(e)
+                    print(f"❌ ERROR en operación: {error_msg}")
+                    traceback.print_exc()
+                    
+                    # ✅ CORRECCIÓN: También manejar BrokenPipeError en el bloque de error
+                    try:
+                        self.send_response(500)
+                        self.send_header('Content-type', 'application/json')
+                        self.end_headers()
+                        self.wfile.write(json.dumps({
+                            'success': False,
+                            'error': error_msg
+                        }).encode('utf-8'))
+                    except BrokenPipeError:
+                        print("⚠️ Cliente cerró la conexión durante el manejo de error")
+            
+            elif self.path == '/iniciar_bot':
+                try:
+                    session = get_authenticated_session(self)
+                    if not session:
+                        raise Exception("No hay sesión activa")
+                    
+                    content_length = int(self.headers.get('Content-Length', 0))
+                    post_data = self.rfile.read(content_length) if content_length > 0 else b'{}'
+                    config = json.loads(post_data.decode('utf-8'))
+                    
+                    print(f"🤖 Bot iniciado para {session['email']}")
+                    
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'success': True,
+                        'message': 'Bot automático iniciado',
+                        'interval_minutes': config.get('interval_minutes', 5)
+                    }).encode('utf-8'))
+                    
+                except Exception as e:
+                    error_msg = str(e)
+                    print(f"❌ ERROR iniciando bot: {error_msg}")
+                    
+                    self.send_response(500)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'success': False,
+                        'error': error_msg
+                    }).encode('utf-8'))
+            
+            elif self.path == '/detener_bot':
+                try:
+                    session = get_authenticated_session(self)
+                    if not session:
+                        raise Exception("No hay sesión activa")
+                    
+                    print(f"🛑 Bot detenido para {session['email']}")
+                    
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'success': True,
+                        'message': 'Bot automático detenido'
+                    }).encode('utf-8'))
+                    
+                except Exception as e:
+                    error_msg = str(e)
+                    print(f"❌ ERROR deteniendo bot: {error_msg}")
+                    
+                    self.send_response(500)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'success': False,
+                        'error': error_msg
+                    }).encode('utf-8'))
+            
+            # 🔥 NUEVO: Endpoints para bot servidor 24/7
+            
+            elif self.path == '/iniciar_bot_servidor':
+                try:
+                    # ✅ YA NO NECESITAMOS global aquí porque está al inicio del método
+                    session = get_authenticated_session(self)
+                    if not session:
+                        raise Exception("No hay sesión activa")
+                    
+                    if bot_servidor_activo:
+                        raise Exception("El bot servidor ya está activo")
+                    
+                    content_length = int(self.headers.get('Content-Length', 0))
+                    post_data = self.rfile.read(content_length) if content_length > 0 else b'{}'
+                    config = json.loads(post_data.decode('utf-8'))
+                    
+                    # Guardar configuración
+                    bot_servidor_config = config
+                    bot_servidor_activo = True
+                    
+                    # Reiniciar estadísticas
+                    bot_servidor_estadisticas = {
+                        'operaciones_ejecutadas': 0,
+                        'operaciones_exitosas': 0,
+                        'ganancia_total': 0.0,
+                        'ultima_operacion_timestamp': None
+                    }
+                    
+                    # Iniciar thread del bot
+                    bot_servidor_thread = threading.Thread(target=ejecutar_bot_servidor)
+                    bot_servidor_thread.daemon = True
+                    bot_servidor_thread.start()
+                    
+                    print(f"🚀 BOT SERVIDOR INICIADO para {session['email']}")
+                    print(f"📋 Configuración: {config}")
+                    
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'success': True,
+                        'message': 'Bot 24/7 iniciado en servidor',
+                        'config': config
+                    }).encode('utf-8'))
+                    
+                except Exception as e:
+                    error_msg = str(e)
+                    print(f"❌ ERROR iniciando bot servidor: {error_msg}")
+                    
+                    self.send_response(500)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'success': False,
+                        'error': error_msg
+                    }).encode('utf-8'))
+            
+            elif self.path == '/detener_bot_servidor':
+                try:
+                    # ✅ YA NO NECESITAMOS global aquí porque está al inicio del método
+                    session = get_authenticated_session(self)
+                    if not session:
+                        raise Exception("No hay sesión activa")
+                    
+                    if not bot_servidor_activo:
+                        raise Exception("El bot servidor no está activo")
+                    
+                    bot_servidor_activo = False
+                    
+                    print(f"🛑 BOT SERVIDOR DETENIDO por {session['email']}")
+                    
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'success': True,
+                        'message': 'Bot servidor detenido',
+                        'estadisticas_finales': bot_servidor_estadisticas
+                    }).encode('utf-8'))
+                    
+                except Exception as e:
+                    error_msg = str(e)
+                    print(f"❌ ERROR deteniendo bot servidor: {error_msg}")
+                    
+                    self.send_response(500)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'success': False,
+                        'error': error_msg
+                    }).encode('utf-8'))
+
+            elif self.path == '/reset_riesgo':
+                try:
+                    session = get_authenticated_session(self)
+                    if not session:
+                        raise Exception("No hay sesión activa")
+                    
+                    print(f"🔄 Riesgo reseteado para {session['email']}")
+                    
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'success': True,
+                        'message': 'Estadísticas de riesgo reseteadas'
+                    }).encode('utf-8'))
+                    
+                except Exception as e:
+                    error_msg = str(e)
+                    print(f"❌ ERROR reseteando riesgo: {error_msg}")
+                    
+                    self.send_response(500)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'success': False,
+                        'error': error_msg
+                    }).encode('utf-8'))
+            
+            else:
+                self.send_error(404, 'Endpoint not found')
+                
+        except BrokenPipeError:
+            print("⚠️ Cliente cerró la conexión abruptamente (BrokenPipeError)")
+            # No hacer nada, el cliente ya se desconectó
+        except Exception as e:
+            print(f"❌ ERROR general en do_POST: {e}")
+            traceback.print_exc()
+            
+            # ✅ CORRECCIÓN: Manejar BrokenPipeError también aquí
             try:
-                session = get_authenticated_session(self)
-                if not session:
-                    raise Exception("No hay sesión activa")
-                
-                print(f"🔄 Riesgo reseteado para {session['email']}")
-                
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({
-                    'success': True,
-                    'message': 'Estadísticas de riesgo reseteadas'
-                }).encode('utf-8'))
-                
-            except Exception as e:
-                error_msg = str(e)
-                print(f"❌ ERROR reseteando riesgo: {error_msg}")
-                
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({
                     'success': False,
-                    'error': error_msg
+                    'error': 'Error interno del servidor'
                 }).encode('utf-8'))
-        
-        else:
-            self.send_error(404, 'Endpoint not found')
+            except BrokenPipeError:
+                print("⚠️ Cliente cerró la conexión durante el manejo de error general")
 
 
 class ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
