@@ -19,7 +19,7 @@ CWD = os.path.dirname(os.path.abspath(__file__))
 active_sessions = {}
 session_tokens = {}
 
-# 🔥 NUEVO: Sistema de bots en servidor
+# 🔥 SISTEMA BOT 24/7 MEJORADO - PERSISTENTE EN SERVIDOR
 bot_servidor_activo = False
 bot_servidor_config = {}
 bot_servidor_thread = None
@@ -28,8 +28,13 @@ bot_servidor_estadisticas = {
     'operaciones_ejecutadas': 0,
     'operaciones_exitosas': 0,
     'ganancia_total': 0.0,
-    'ultima_operacion_timestamp': None
+    'ultima_operacion_timestamp': None,
+    'inicio_timestamp': None,
+    'proxima_operacion_timestamp': None
 }
+
+# 🔥 NUEVO: Almacenar credenciales para reconexión automática
+bot_servidor_credenciales = None
 
 class SessionManager:
     SESSION_TIMEOUT = 24 * 3600  # 24 horas
@@ -99,21 +104,14 @@ def get_authenticated_session(handler):
     try:
         auth_header = handler.headers.get('Authorization', '')
         if not auth_header.startswith('Bearer '):
-            print("❌ No se encontró header Authorization")
             return None
         
         token = auth_header.replace('Bearer ', '').strip()
         if not token:
-            print("❌ Token vacío")
             return None
         
         session = SessionManager.get_session(token)
-        if session:
-            print(f"✅ Sesión válida para: {session['email']}")
-            return session
-        else:
-            print("❌ Sesión no encontrada o expirada")
-            return None
+        return session
             
     except Exception as e:
         print(f"❌ Error en autenticación: {e}")
@@ -132,11 +130,9 @@ def obtener_balances_reales(iq):
         # Método 1: Intentar con get_balances()
         try:
             balances_data = iq.get_balances()
-            print(f"📊 Respuesta de get_balances(): {balances_data}")
             
             if balances_data and isinstance(balances_data, dict):
                 balances_list = balances_data.get('msg', [])
-                print(f"📋 Balances encontrados: {len(balances_list)}")
                 
                 for bal in balances_list:
                     if isinstance(bal, dict):
@@ -153,8 +149,6 @@ def obtener_balances_reales(iq):
                             demo_balance = float(amount)
                             demo_id = bal_id
                             print(f"✅ Balance DEMO: ${demo_balance}")
-                        elif bal_type == 5:
-                            print(f"🔗 Balance Crypto: ${amount}")
             
         except Exception as e:
             print(f"⚠️ Error con get_balances(): {e}")
@@ -192,9 +186,7 @@ def obtener_balances_reales(iq):
             real_balance = 0.0
             demo_balance = 10000.0
 
-        print(f"📊 RESUMEN FINAL:")
-        print(f"   REAL: ${real_balance}")
-        print(f"   DEMO: ${demo_balance}")
+        print(f"📊 RESUMEN FINAL: REAL: ${real_balance}, DEMO: ${demo_balance}")
         
     except Exception as e:
         print(f"❌ Error general obteniendo balances: {e}")
@@ -203,38 +195,102 @@ def obtener_balances_reales(iq):
     
     return real_balance, demo_balance, real_id, demo_id
 
-# 🔥 NUEVA FUNCIÓN: Bot servidor 24/7
+# 🔥 NUEVA FUNCIÓN MEJORADA: Bot servidor 24/7 con timing preciso
 def ejecutar_bot_servidor():
-    """Ejecuta el bot automático en el servidor de forma continua"""
-    # ✅ CORRECCIÓN: Declaración global al inicio
-    global bot_servidor_activo, bot_servidor_ultima_operacion, bot_servidor_estadisticas
+    """Ejecuta el bot automático en el servidor de forma continua y precisa"""
+    global bot_servidor_activo, bot_servidor_ultima_operacion, bot_servidor_estadisticas, bot_servidor_credenciales
     
-    print(f"\n🎯 INICIANDO BOT SERVIDOR 24/7")
+    print(f"\n🎯 INICIANDO BOT SERVIDOR 24/7 - INDEPENDIENTE DEL CLIENTE")
     print(f"⏰ Intervalo: {bot_servidor_config.get('intervalo', 5)} minutos")
     print(f"🎮 Modo: {bot_servidor_config.get('modo', 'demo').upper()}")
     print(f"📊 Configuración riesgo: {bot_servidor_config.get('riesgo_porcentaje', 2)}%")
     
+    # 🔥 TIMING PRECISO: Calcular el próximo ciclo exacto
+    intervalo_segundos = bot_servidor_config.get('intervalo', 5) * 60
+    siguiente_ciclo = time.time()
+    
+    # Estadísticas de inicio
+    bot_servidor_estadisticas['inicio_timestamp'] = time.time()
+    
+    ciclo_numero = 0
+    
     while bot_servidor_activo:
         try:
-            # Obtener sesión activa (usar la primera sesión disponible)
+            ciclo_numero += 1
+            tiempo_actual = time.time()
+            
+            # 🔥 TIMING PRECISO: Esperar hasta el próximo ciclo exacto
+            tiempo_espera = siguiente_ciclo - tiempo_actual
+            if tiempo_espera > 0:
+                # Espera precisa en segmentos pequeños para poder detener el bot
+                segmentos = int(tiempo_espera)
+                for i in range(segmentos):
+                    if not bot_servidor_activo:
+                        return
+                    time.sleep(1)
+                if tiempo_espera - segmentos > 0:
+                    time.sleep(tiempo_espera - segmentos)
+            
+            # Calcular próximo ciclo
+            siguiente_ciclo = time.time() + intervalo_segundos
+            bot_servidor_estadisticas['proxima_operacion_timestamp'] = siguiente_ciclo
+            
+            print(f"\n{'='*60}")
+            print(f"🤖 BOT SERVIDOR - CICLO {ciclo_numero}")
+            print(f"{'='*60}")
+            print(f"⏰ Hora actual: {time.strftime('%H:%M:%S')}")
+            print(f"⏰ Próxima operación: {time.strftime('%H:%M:%S', time.localtime(siguiente_ciclo))}")
+            print(f"{'='*60}")
+            
+            # 🔥 RECONEXIÓN AUTOMÁTICA: Si no hay sesión, reconectar
             session_activa = None
             for token, session_data in active_sessions.items():
                 session_activa = session_data
                 break
             
+            if not session_activa and bot_servidor_credenciales:
+                print("🔄 No hay sesión activa, intentando reconexión automática...")
+                try:
+                    email = bot_servidor_credenciales['email']
+                    password = bot_servidor_credenciales['password']
+                    
+                    # Cerrar sesiones existentes
+                    if email in session_tokens:
+                        SessionManager.delete_session_by_email(email)
+                    
+                    # Reconectar
+                    print("⏳ Reconectando a IQ Option...")
+                    iq_session = _connect(email, password)
+                    print("✅ Reconexión exitosa.")
+                    
+                    # Crear nueva sesión
+                    token = SessionManager.create_session(email, iq_session)
+                    session_activa = active_sessions[token]
+                    
+                except Exception as e:
+                    print(f"❌ Error en reconexión automática: {e}")
+                    # Esperar 1 minuto y reintentar en el próximo ciclo
+                    siguiente_ciclo = time.time() + 60
+                    continue
+            
             if not session_activa:
-                print("❌ No hay sesiones activas para el bot servidor")
-                time.sleep(60)  # Esperar 1 minuto y reintentar
+                print("❌ No hay sesiones activas y no hay credenciales para reconexión")
+                # Esperar 5 minutos y reintentar
+                siguiente_ciclo = time.time() + 300
                 continue
             
-            print(f"\n{'='*50}")
-            print(f"🤖 BOT SERVIDOR - CICLO {bot_servidor_estadisticas['operaciones_ejecutadas'] + 1}")
-            print(f"{'='*50}")
             print(f"👤 Usuario: {session_activa['email']}")
-            print(f"⏰ Hora: {time.strftime('%H:%M:%S')}")
-            print(f"{'='*50}")
             
-            # Ejecutar operación usando la MISMA lógica de operar.py
+            # 🔥 VERIFICAR STOP LOSS DIARIO
+            stop_loss_diario = bot_servidor_config.get('stop_loss_diario', 15)
+            if (bot_servidor_estadisticas['ganancia_total'] < -abs(stop_loss_diario) and 
+                bot_servidor_estadisticas['operaciones_ejecutadas'] > 0):
+                print(f"🛑 STOP LOSS DIARIO ACTIVADO: ${bot_servidor_estadisticas['ganancia_total']:.2f}")
+                print("🔴 El bot se detendrá automáticamente")
+                bot_servidor_activo = False
+                break
+            
+            # 🔥 EJECUTAR OPERACIÓN
             resultado = ejecutar_operacion(
                 session_activa['iq'],
                 modo=bot_servidor_config.get('modo', 'demo'),
@@ -249,12 +305,13 @@ def ejecutar_bot_servidor():
                 }
             )
             
-            # Actualizar estadísticas
+            # 🔥 ACTUALIZAR ESTADÍSTICAS
             bot_servidor_estadisticas['operaciones_ejecutadas'] += 1
             bot_servidor_ultima_operacion = {
                 'timestamp': time.time(),
                 'resultado': resultado,
-                'numero_operacion': bot_servidor_estadisticas['operaciones_ejecutadas']
+                'numero_operacion': bot_servidor_estadisticas['operaciones_ejecutadas'],
+                'ciclo': ciclo_numero
             }
             
             if resultado.get('ejecutado'):
@@ -266,30 +323,24 @@ def ejecutar_bot_servidor():
             
             bot_servidor_estadisticas['ultima_operacion_timestamp'] = time.time()
             
-            print(f"📊 Estadísticas servidor:")
-            print(f"   Operaciones: {bot_servidor_estadisticas['operaciones_ejecutadas']}")
-            print(f"   Exitosas: {bot_servidor_estadisticas['operaciones_exitosas']}")
+            # 🔥 MOSTRAR ESTADÍSTICAS ACTUALIZADAS
+            print(f"📊 ESTADÍSTICAS BOT 24/7:")
+            print(f"   Operaciones totales: {bot_servidor_estadisticas['operaciones_ejecutadas']}")
+            print(f"   Operaciones exitosas: {bot_servidor_estadisticas['operaciones_exitosas']}")
             print(f"   Ganancia total: ${bot_servidor_estadisticas['ganancia_total']:.2f}")
-            print(f"⏳ Próxima operación en {bot_servidor_config.get('intervalo', 5)} minutos...")
-            print(f"{'='*50}\n")
-            
-            # Esperar el intervalo configurado
-            intervalo_segundos = bot_servidor_config.get('intervalo', 5) * 60
-            for i in range(intervalo_segundos):
-                if not bot_servidor_activo:
-                    break
-                time.sleep(1)
+            print(f"   Stop loss diario: ${stop_loss_diario}")
+            print(f"⏳ Próxima operación: {time.strftime('%H:%M:%S', time.localtime(siguiente_ciclo))}")
+            print(f"{'='*60}\n")
                 
         except Exception as e:
             print(f"❌ ERROR en bot servidor: {e}")
             traceback.print_exc()
-            # Esperar 1 minuto antes de reintentar en caso de error
-            for i in range(60):
-                if not bot_servidor_activo:
-                    break
-                time.sleep(1)
+            # En caso de error, esperar 2 minutos antes de reintentar
+            siguiente_ciclo = time.time() + 120
     
     print("🛑 BOT SERVIDOR DETENIDO")
+    # Limpiar credenciales por seguridad
+    bot_servidor_credenciales = None
 
 class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
     
@@ -318,7 +369,7 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
             }).encode('utf-8'))
             return
         
-        # 🔥 NUEVO: Endpoint para verificar estado del bot servidor
+        # 🔥 Endpoint para verificar estado del bot servidor
         elif self.path == '/estado_bot_servidor':
             session = get_authenticated_session(self)
             if not session:
@@ -331,6 +382,12 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                 }).encode('utf-8'))
                 return
             
+            # Calcular tiempo hasta próxima operación
+            proxima_operacion = bot_servidor_estadisticas.get('proxima_operacion_timestamp')
+            tiempo_restante = None
+            if proxima_operacion:
+                tiempo_restante = max(0, proxima_operacion - time.time())
+            
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
@@ -341,6 +398,8 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                 'estadisticas': bot_servidor_estadisticas,
                 'ultima_operacion': bot_servidor_ultima_operacion,
                 'ultima_operacion_timestamp': bot_servidor_estadisticas['ultima_operacion_timestamp'],
+                'proxima_operacion_timestamp': proxima_operacion,
+                'tiempo_restante_segundos': tiempo_restante,
                 'intervalo': bot_servidor_config.get('intervalo', 5)
             }).encode('utf-8'))
             return
@@ -349,7 +408,6 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
             try:
                 session = get_authenticated_session(self)
                 if session:
-                    # Obtener balances actualizados
                     real_balance, demo_balance, real_id, demo_id = obtener_balances_reales(session['iq'])
                     
                     self.send_response(200)
@@ -391,7 +449,8 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({
                 'active_sessions_count': len(active_sessions),
                 'session_tokens_count': len(session_tokens),
-                'active_sessions': list(active_sessions.keys())[:5]  # Primeros 5 tokens
+                'bot_activo': bot_servidor_activo,
+                'bot_tiene_credenciales': bot_servidor_credenciales is not None
             }).encode('utf-8'))
             return
         
@@ -427,8 +486,7 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
             self.send_error(500, f'Server Error: {e}')
 
     def do_POST(self):
-        # ✅ CORRECCIÓN CRÍTICA: Declaraciones globales AL INICIO del método
-        global bot_servidor_activo, bot_servidor_config, bot_servidor_thread, bot_servidor_estadisticas
+        global bot_servidor_activo, bot_servidor_config, bot_servidor_thread, bot_servidor_estadisticas, bot_servidor_credenciales
         
         try:
             if self.path == '/login':
@@ -579,7 +637,6 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                 try:
                     session = get_authenticated_session(self)
                     if not session:
-                        # ✅ MEJOR MENSAJE DE ERROR
                         self.send_response(401)
                         self.send_header('Content-type', 'application/json')
                         self.end_headers()
@@ -600,7 +657,7 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                     forzar_operacion = config.get('forzar_operacion', False)
                     
                     print(f"\n{'='*70}")
-                    print(f"🎯 OPERACIÓN SOLICITADA")
+                    print(f"🎯 OPERACIÓN MANUAL SOLICITADA")
                     print(f"{'='*70}")
                     print(f"Usuario: {session['email']}")
                     print(f"Modo: {modo.upper()}")
@@ -609,7 +666,7 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                     print(f"Forzar: {'SÍ' if forzar_operacion else 'NO'}")
                     print(f"{'='*70}\n")
                     
-                    # EJECUTAR OPERACIÓN REAL con el módulo operar
+                    # EJECUTAR OPERACIÓN MANUAL
                     resultado = ejecutar_operacion(
                         session['iq'],
                         modo=modo,
@@ -637,20 +694,17 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                     self.send_header('Content-type', 'application/json')
                     self.end_headers()
                     
-                    # ✅ CORRECCIÓN: Manejar BrokenPipeError específicamente
                     try:
                         self.wfile.write(json.dumps(resultado).encode('utf-8'))
-                        print(f"✅ Operación REAL completada y respuesta enviada\n")
+                        print(f"✅ Operación MANUAL completada\n")
                     except BrokenPipeError:
                         print("⚠️ Cliente cerró la conexión antes de recibir la respuesta completa")
-                        # No hacer nada, el cliente ya se desconectó
                     
                 except Exception as e:
                     error_msg = str(e)
-                    print(f"❌ ERROR en operación: {error_msg}")
+                    print(f"❌ ERROR en operación manual: {error_msg}")
                     traceback.print_exc()
                     
-                    # ✅ CORRECCIÓN: También manejar BrokenPipeError en el bloque de error
                     try:
                         self.send_response(500)
                         self.send_header('Content-type', 'application/json')
@@ -662,72 +716,10 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                     except BrokenPipeError:
                         print("⚠️ Cliente cerró la conexión durante el manejo de error")
             
-            elif self.path == '/iniciar_bot':
-                try:
-                    session = get_authenticated_session(self)
-                    if not session:
-                        raise Exception("No hay sesión activa")
-                    
-                    content_length = int(self.headers.get('Content-Length', 0))
-                    post_data = self.rfile.read(content_length) if content_length > 0 else b'{}'
-                    config = json.loads(post_data.decode('utf-8'))
-                    
-                    print(f"🤖 Bot iniciado para {session['email']}")
-                    
-                    self.send_response(200)
-                    self.send_header('Content-type', 'application/json')
-                    self.end_headers()
-                    self.wfile.write(json.dumps({
-                        'success': True,
-                        'message': 'Bot automático iniciado',
-                        'interval_minutes': config.get('interval_minutes', 5)
-                    }).encode('utf-8'))
-                    
-                except Exception as e:
-                    error_msg = str(e)
-                    print(f"❌ ERROR iniciando bot: {error_msg}")
-                    
-                    self.send_response(500)
-                    self.send_header('Content-type', 'application/json')
-                    self.end_headers()
-                    self.wfile.write(json.dumps({
-                        'success': False,
-                        'error': error_msg
-                    }).encode('utf-8'))
-            
-            elif self.path == '/detener_bot':
-                try:
-                    session = get_authenticated_session(self)
-                    if not session:
-                        raise Exception("No hay sesión activa")
-                    
-                    print(f"🛑 Bot detenido para {session['email']}")
-                    
-                    self.send_response(200)
-                    self.send_header('Content-type', 'application/json')
-                    self.end_headers()
-                    self.wfile.write(json.dumps({
-                        'success': True,
-                        'message': 'Bot automático detenido'
-                    }).encode('utf-8'))
-                    
-                except Exception as e:
-                    error_msg = str(e)
-                    print(f"❌ ERROR deteniendo bot: {error_msg}")
-                    
-                    self.send_response(500)
-                    self.send_header('Content-type', 'application/json')
-                    self.end_headers()
-                    self.wfile.write(json.dumps({
-                        'success': False,
-                        'error': error_msg
-                    }).encode('utf-8'))
-            
-            # 🔥 NUEVO: Endpoints para bot servidor 24/7
+            # 🔥 BOT 24/7 - OPERACIÓN AUTOMÁTICA EN SERVIDOR
             
             elif self.path == '/iniciar_bot_servidor':
                 try:
-                    # ✅ YA NO NECESITAMOS global aquí porque está al inicio del método
                     session = get_authenticated_session(self)
                     if not session:
                         raise Exception("No hay sesión activa")
@@ -739,6 +731,15 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                     post_data = self.rfile.read(content_length) if content_length > 0 else b'{}'
                     config = json.loads(post_data.decode('utf-8'))
                     
+                    # 🔥 GUARDAR CREDENCIALES PARA RECONEXIÓN AUTOMÁTICA
+                    bot_servidor_credenciales = {
+                        'email': session['email'],
+                        'password': config.get('password')  # El frontend debe enviar el password
+                    }
+                    
+                    if not bot_servidor_credenciales['password']:
+                        raise Exception("Se requiere password para el bot 24/7")
+                    
                     # Guardar configuración
                     bot_servidor_config = config
                     bot_servidor_activo = True
@@ -748,7 +749,9 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                         'operaciones_ejecutadas': 0,
                         'operaciones_exitosas': 0,
                         'ganancia_total': 0.0,
-                        'ultima_operacion_timestamp': None
+                        'ultima_operacion_timestamp': None,
+                        'inicio_timestamp': time.time(),
+                        'proxima_operacion_timestamp': None
                     }
                     
                     # Iniciar thread del bot
@@ -756,15 +759,16 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                     bot_servidor_thread.daemon = True
                     bot_servidor_thread.start()
                     
-                    print(f"🚀 BOT SERVIDOR INICIADO para {session['email']}")
+                    print(f"🚀 BOT 24/7 INICIADO para {session['email']}")
                     print(f"📋 Configuración: {config}")
+                    print(f"🔐 Credenciales guardadas para reconexión automática")
                     
                     self.send_response(200)
                     self.send_header('Content-type', 'application/json')
                     self.end_headers()
                     self.wfile.write(json.dumps({
                         'success': True,
-                        'message': 'Bot 24/7 iniciado en servidor',
+                        'message': 'Bot 24/7 iniciado en servidor - Funciona independientemente del cliente',
                         'config': config
                     }).encode('utf-8'))
                     
@@ -782,7 +786,6 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
             
             elif self.path == '/detener_bot_servidor':
                 try:
-                    # ✅ YA NO NECESITAMOS global aquí porque está al inicio del método
                     session = get_authenticated_session(self)
                     if not session:
                         raise Exception("No hay sesión activa")
@@ -791,8 +794,9 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                         raise Exception("El bot servidor no está activo")
                     
                     bot_servidor_activo = False
+                    bot_servidor_credenciales = None  # Limpiar credenciales
                     
-                    print(f"🛑 BOT SERVIDOR DETENIDO por {session['email']}")
+                    print(f"🛑 BOT 24/7 DETENIDO por {session['email']}")
                     
                     self.send_response(200)
                     self.send_header('Content-type', 'application/json')
@@ -848,12 +852,10 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                 
         except BrokenPipeError:
             print("⚠️ Cliente cerró la conexión abruptamente (BrokenPipeError)")
-            # No hacer nada, el cliente ya se desconectó
         except Exception as e:
             print(f"❌ ERROR general en do_POST: {e}")
             traceback.print_exc()
             
-            # ✅ CORRECCIÓN: Manejar BrokenPipeError también aquí
             try:
                 self.send_response(500)
                 self.send_header('Content-type', 'application/json')
@@ -867,181 +869,64 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
 
 
 class ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
-
-
     daemon_threads = True
 
-
-
-
-
 def cleanup_sessions_periodically():
-
-
     """Ejecutar limpieza de sesiones cada hora"""
-
-
     while True:
-
-
         time.sleep(3600)  # 1 hora
-
-
         SessionManager.cleanup_expired_sessions()
 
-
-
-
-
 def run_server(port=PORT):
-
-
-    # ✅ CORRECCIÓN CRÍTICA: Declaración global al inicio de la función
-
-
     global bot_servidor_activo, bot_servidor_thread
-
-
     
-
-
     # Iniciar limpieza de sesiones
-
-
     cleanup_thread = threading.Thread(target=cleanup_sessions_periodically)
-
-
     cleanup_thread.daemon = True
-
-
     cleanup_thread.start()
-
-
     
-
-
     server_address = ('', port)
-
-
     
-
-
     try:
-
-
         httpd = ThreadedHTTPServer(server_address, MyHttpRequestHandler)
-
-
         
-
-
         print("\n" + "="*70)
-
-
         print(f"🚀 SERVIDOR HTTP INICIADO")
-
-
         print("="*70)
-
-
         print(f"🌐 URL: http://localhost:{port}")
-
-
         print(f"📂 Directorio: {CWD}")
-
-
         print(f"🔐 Sistema de sesiones activado")
-
-
+        print(f"🤖 BOT 24/7 ACTIVADO - INDEPENDIENTE DEL CLIENTE")
         print(f"💰 Balances REALES activados")
-
-
         print("="*70)
-
-
         print("\n✅ Servidor listo para recibir conexiones")
-
-
         print("⌨️  Presiona Ctrl+C para detener\n")
-
-
         
-
-
         httpd.serve_forever()
-
-
         
-
-
     except OSError as e:
-
-
         if "address already in use" in str(e).lower():
-
-
             print(f"\n❌ ERROR: El puerto {port} ya está en uso")
-
-
             print(f"💡 Solución: Cambia PORT en server.py o cierra el proceso que usa el puerto")
-
-
         else:
-
-
             print(f"\n❌ ERROR: {e}\n")
-
-
             traceback.print_exc()
-
-
     except KeyboardInterrupt:
-
-
         print("\n\n🛑 Servidor detenido")
-
-
         # Detener bot servidor si está activo
-
-
         if bot_servidor_activo:
-
-
             print("🛑 Deteniendo bot servidor...")
-
-
             bot_servidor_activo = False
-
-
             if bot_servidor_thread and bot_servidor_thread.is_alive():
-
-
                 bot_servidor_thread.join(timeout=10)
-
-
         
-
-
         # Limpiar todas las sesiones
-
-
         active_sessions.clear()
-
-
         session_tokens.clear()
-
-
         httpd.server_close()
-
-
     except Exception as e:
-
-
         print(f"\n❌ ERROR INESPERADO: {e}\n")
-
-
         traceback.print_exc()
-
 
 if __name__ == '__main__':
     run_server()
