@@ -374,6 +374,9 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
             self.send_error(500, f'Server Error: {e}')
 
     def do_POST(self):
+        # ✅ CORRECCIÓN CRÍTICA: Declaraciones globales AL INICIO del método
+        global bot_servidor_activo, bot_servidor_config, bot_servidor_thread, bot_servidor_estadisticas
+        
         if self.path == '/login':
             try:
                 content_length = int(self.headers.get('Content-Length', 0))
@@ -652,9 +655,7 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
         
         elif self.path == '/iniciar_bot_servidor':
             try:
-                # ✅ CORRECCIÓN: Declaración global al inicio
-                global bot_servidor_activo, bot_servidor_config, bot_servidor_thread, bot_servidor_estadisticas
-                
+                # ✅ YA NO NECESITAMOS global aquí porque está al inicio del método
                 session = get_authenticated_session(self)
                 if not session:
                     raise Exception("No hay sesión activa")
@@ -663,7 +664,6 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                     raise Exception("El bot servidor ya está activo")
                 
                 content_length = int(self.headers.get('Content-Length', 0))
-                # ✅ CORRECCIÓN: b'{}}' corregido a b'{}'
                 post_data = self.rfile.read(content_length) if content_length > 0 else b'{}'
                 config = json.loads(post_data.decode('utf-8'))
                 
@@ -710,9 +710,7 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
         
         elif self.path == '/detener_bot_servidor':
             try:
-                # ✅ CORRECCIÓN: Declaración global al inicio
-                global bot_servidor_activo, bot_servidor_estadisticas
-                
+                # ✅ YA NO NECESITAMOS global aquí porque está al inicio del método
                 session = get_authenticated_session(self)
                 if not session:
                     raise Exception("No hay sesión activa")
