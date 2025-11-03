@@ -6,7 +6,7 @@ import sys
 import traceback
 import time
 import uuid
-import threading  # 🔥 CORRECCIÓN: Import faltante
+import threading
 from urllib.parse import urlparse, parse_qs
 from conexion import _connect
 from operar import ejecutar_operacion
@@ -175,7 +175,7 @@ def obtener_balances_reales(iq):
 # 🔥 NUEVA FUNCIÓN: Bot servidor 24/7
 def ejecutar_bot_servidor():
     """Ejecuta el bot automático en el servidor de forma continua"""
-    # 🔥 CORRECCIÓN: Declaración global al inicio
+    # ✅ CORRECCIÓN: Declaración global al inicio
     global bot_servidor_activo, bot_servidor_ultima_operacion, bot_servidor_estadisticas
     
     print(f"\n🎯 INICIANDO BOT SERVIDOR 24/7")
@@ -652,18 +652,18 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
         
         elif self.path == '/iniciar_bot_servidor':
             try:
+                # ✅ CORRECCIÓN: Declaración global al inicio
+                global bot_servidor_activo, bot_servidor_config, bot_servidor_thread, bot_servidor_estadisticas
+                
                 session = get_authenticated_session(self)
                 if not session:
                     raise Exception("No hay sesión activa")
-                
-                # 🔥 CORRECCIÓN: Declaración global al inicio
-                global bot_servidor_activo, bot_servidor_config, bot_servidor_thread, bot_servidor_estadisticas
                 
                 if bot_servidor_activo:
                     raise Exception("El bot servidor ya está activo")
                 
                 content_length = int(self.headers.get('Content-Length', 0))
-                # 🔥 CORRECCIÓN: b'{}}' corregido a b'{}'
+                # ✅ CORRECCIÓN: b'{}}' corregido a b'{}'
                 post_data = self.rfile.read(content_length) if content_length > 0 else b'{}'
                 config = json.loads(post_data.decode('utf-8'))
                 
@@ -710,7 +710,7 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
         
         elif self.path == '/detener_bot_servidor':
             try:
-                # 🔥 CORRECCIÓN: Declaración global al inicio
+                # ✅ CORRECCIÓN: Declaración global al inicio
                 global bot_servidor_activo, bot_servidor_estadisticas
                 
                 session = get_authenticated_session(self)
@@ -782,6 +782,9 @@ class ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
 
 
 def run_server(port=PORT):
+    # ✅ CORRECCIÓN CRÍTICA: Declaración global al inicio de la función
+    global bot_servidor_activo, bot_servidor_thread
+    
     server_address = ('', port)
     
     try:
@@ -810,7 +813,6 @@ def run_server(port=PORT):
     except KeyboardInterrupt:
         print("\n\n🛑 Servidor detenido")
         # Detener bot servidor si está activo
-        global bot_servidor_activo
         if bot_servidor_activo:
             print("🛑 Deteniendo bot servidor...")
             bot_servidor_activo = False
