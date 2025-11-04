@@ -546,6 +546,10 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                     print("⏳ Conectando a IQ Option...")
                     iq_session = _connect(email, password)
                     print("✅ Conexión establecida.")
+
+                    # Guardar credenciales para el bot 24/7
+                    database.guardar_credenciales_bot({'email': email, 'password': password})
+                    print("🔐 Credenciales guardadas para el bot 24/7.")
                     
                     # Obtener balances REALES
                     real_balance, demo_balance, real_id, demo_id = obtener_balances_reales(iq_session)
@@ -760,17 +764,12 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                     post_data = self.rfile.read(content_length) if content_length > 0 else b'{}'
                     config = json.loads(post_data.decode('utf-8'))
                     
-                    credenciales = {
-                        'email': session['email'],
-                        'password': config.get('password')
-                    }
-                    
-                    if not credenciales['password']:
-                        raise Exception("Se requiere password para el bot 24/7")
-                    
-                    # Guardar configuración y credenciales en la base de datos
+                    # Las credenciales ya se guardan en el login
+                    credenciales = database.obtener_credenciales_bot()
+                    if not credenciales or not credenciales.get('password'):
+                        raise Exception("No se encontraron credenciales guardadas. Por favor, inicie sesión de nuevo.")
+
                     database.guardar_config_bot(config)
-                    database.guardar_credenciales_bot(credenciales)
                     
                     # Reiniciar estadísticas en la base de datos
                     nuevas_estadisticas = {
