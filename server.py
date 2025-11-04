@@ -22,7 +22,6 @@ from database import (
     guardar_config_bot,
     detener_bot_servidor,
     esta_activo_bot_servidor,
-    guardar_credenciales_bot,
     obtener_credenciales_bot,
     limpiar_credenciales_bot,
     guardar_ultima_operacion_bot,
@@ -752,6 +751,7 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                     if not credenciales['password']:
                         raise Exception("Se requiere password para el bot 24/7")
                     
+                    from database import guardar_credenciales_bot
                     guardar_credenciales_bot(credenciales)
                     guardar_config_bot(config)
                     
