@@ -856,30 +856,7 @@
                 </div>
             </div>
 
-            <!-- Bot Status Banner -->
-            <div class="bot-status-banner" id="botStatusBanner">
-                <div class="bot-status-icon">⚙️</div>
-                <div class="bot-status-title">🤖 BOT AUTOMÁTICO ACTIVO</div>
-                <div class="bot-status-message">
-                    El bot está analizando el mercado y ejecutando operaciones automáticamente.<br>
-                    <strong>No necesitas hacer nada, yo me encargo de todo.</strong>
-                </div>
-                <div class="bot-stats-inline">
-                    <div class="bot-stat-item">
-                        <div class="bot-stat-label">Próximo análisis en</div>
-                        <div class="bot-stat-value" id="nextAnalysis">5:00</div>
-                    </div>
-                    <div class="bot-stat-item">
-                        <div class="bot-stat-label">Operaciones ejecutadas</div>
-                        <div class="bot-stat-value" id="autoTradesCount">0</div>
-                    </div>
-                    <div class="bot-stat-item">
-                        <div class="bot-stat-label">Último resultado</div>
-                        <div class="bot-stat-value" id="lastResult">-</div>
-                    </div>
-                </div>
-                <button class="btn-stop-bot" onclick="detenerBot()">🛑 DETENER BOT</button>
-            </div>
+
 
             <!-- Stats Overview -->
             <div class="stats-grid">
@@ -1020,44 +997,12 @@
                     </div>
                 </div>
 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
-                    <button class="btn-trade" id="tradeBtn" onclick="iniciarBotAutomatico()">
-                        🤖 BOT CLIENTE (Móvil)
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-top: 20px;">
+                    <button class="btn-trade" id="serverBotBtn" onclick="iniciarBotServidor()" style="background: #0066FF; box-shadow: 0 0 20px rgba(0, 102, 255, 0.5);">
+                        🚀 BOT 24/7 SERVIDOR
                     </button>
                     <button class="btn-trade" id="manualBtn" onclick="operacionManual()" style="background: #FF6600; box-shadow: 0 0 20px rgba(255, 102, 0, 0.5);">
                         🎯 OPERACIÓN MANUAL
-                    </button>
-                </div>
-
-                <!-- 🔥 NUEVA SECCIÓN: Bot 24/7 en Servidor -->
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
-                    <button class="btn-trade" id="serverBotBtn" onclick="iniciarBotServidor()" style="background: #0066FF; box-shadow: 0 0 20px rgba(0, 102, 255, 0.5);">
-                        🚀 BOT 24/7 SERVIDOR
-                    </button>
-                    <button class="btn-trade" id="stopServerBotBtn" onclick="detenerBotServidor()" style="background: #FF4444; box-shadow: 0 0 20px rgba(255, 68, 68, 0.5);">
-                        🛑 DETENER BOT SERVIDOR
-                    </button>
-                </div>
-
-                <!-- 🔥 NUEVO: Estado del Bot Servidor -->
-                <div id="serverBotStatus" style="background: #1a1a1a; border: 2px solid #0066FF; border-radius: 8px; padding: 15px; margin-top: 15px; display: none;">
-                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                        <div style="width: 10px; height: 10px; background: #00FF00; border-radius: 50%; animation: pulseDot 2s infinite;"></div>
-                        <strong style="color: #00FF00;">🤖 BOT SERVIDOR ACTIVO 24/7</strong>
-                    </div>
-                    <div style="font-size: 13px; color: #CCCCCC;">
-                        ✅ Funciona con celular apagado<br>
-                        ⚡ Operando automáticamente cada <span id="serverInterval">5</span> minutos
-                    </div>
-                    <div style="margin-top: 10px; font-size: 12px; color: #999;">
-                        Última operación: <span id="lastServerOperation">-</span>
-                    </div>
-                </div>
-
-                <!-- 🔥 NUEVA SECCIÓN: Bot 24/7 en Servidor -->
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
-                    <button class="btn-trade" id="serverBotBtn" onclick="iniciarBotServidor()" style="background: #0066FF; box-shadow: 0 0 20px rgba(0, 102, 255, 0.5);">
-                        🚀 BOT 24/7 SERVIDOR
                     </button>
                     <button class="btn-trade" id="stopServerBotBtn" onclick="detenerBotServidor()" style="background: #FF4444; box-shadow: 0 0 20px rgba(255, 68, 68, 0.5);">
                         🛑 DETENER BOT SERVIDOR
@@ -1125,11 +1070,7 @@
         const appState = {
             sessionToken: null,
             userData: null,
-            botRunning: false,
-            intervalId: null,
-            countdownId: null,
             trades: [],
-            autoTradesCount: 0,
             stats: {
                 wins: 0,
                 losses: 0,
@@ -1190,8 +1131,7 @@
                     restoreDashboard(data.user_data);
                     console.log('✅ Sesión restaurada');
                     
-                    // Sincronizar bot al cargar la página
-                    setTimeout(sincronizarBot, 1000);
+
 
                     // Verificar estado del bot servidor
                     setTimeout(verificarEstadoServidor, 2000);
@@ -1207,97 +1147,7 @@
             });
         }
 
-        // 🔥 NUEVA FUNCIÓN: Sincronizar y restaurar el bot
-        function sincronizarBot() {
-            // No hacer nada si el bot ya está activo en el estado de la app
-            if (appState.botRunning) {
-                return;
-            }
 
-            const botConfig = localStorage.getItem('bot_config');
-            if (!botConfig) return;
-
-            try {
-                const config = JSON.parse(botConfig);
-                const tiempoTranscurrido = Date.now() - config.timestamp;
-                const unaHora = 60 * 60 * 1000;
-
-                if (tiempoTranscurrido < unaHora) {
-                    console.log('🔄 Sincronizando y restaurando estado del bot...');
-
-                    // Limpiar intervalos viejos por si acaso
-                    if (appState.intervalId) clearInterval(appState.intervalId);
-                    if (appState.countdownId) clearInterval(appState.countdownId);
-
-                    // Restaurar UI
-                    document.getElementById('accountMode').value = config.modo;
-                    document.getElementById('intervalMinutes').value = config.intervalo / 60000;
-                    if (config.monto !== null) {
-                        document.getElementById('tipoMonto').value = 'fijo';
-                        document.getElementById('montoFijoContainer').style.display = 'block';
-                        document.getElementById('tradeAmount').value = config.monto;
-                    }
-
-                    // Actualizar estado de la app y UI
-                    appState.botRunning = true;
-                    mostrarBannerBot();
-
-                    // Reiniciar el ciclo de operaciones
-                    appState.intervalId = setInterval(() => {
-                        ejecutarOperacionAutomatica(config.monto);
-                    }, config.intervalo);
-
-                    // Reiniciar el countdown con persistencia
-                    iniciarCountdown(config.intervalo);
-
-                    mostrarNotificacionBotRestaurado();
-                } else {
-                    console.log('🧹 Configuración de bot expirada, limpiando...');
-                    localStorage.removeItem('bot_config');
-                    localStorage.removeItem('bot_countdown');
-                }
-            } catch (e) {
-                console.error('❌ Error en sincronizarBot:', e);
-                localStorage.removeItem('bot_config');
-                localStorage.removeItem('bot_countdown');
-            }
-        }
-
-        // 🔥 NUEVA FUNCIÓN: Mostrar notificación del bot restaurado
-        function mostrarNotificacionBotRestaurado() {
-            // Crear notificación temporal
-            const notificacion = document.createElement('div');
-            notificacion.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                background: #00FF00;
-                color: #000;
-                padding: 15px 20px;
-                border-radius: 8px;
-                font-weight: bold;
-                box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
-                z-index: 10000;
-                animation: slideIn 0.5s ease;
-            `;
-            
-            notificacion.innerHTML = `
-                🤖 BOT RESTAURADO<br>
-                <small>Funcionando automáticamente</small>
-            `;
-            
-            document.body.appendChild(notificacion);
-            
-            // Auto-remover después de 3 segundos
-            setTimeout(() => {
-                notificacion.style.animation = 'slideOut 0.5s ease';
-                setTimeout(() => {
-                    if (notificacion.parentNode) {
-                        notificacion.parentNode.removeChild(notificacion);
-                    }
-                }, 500);
-            }, 3000);
-        }
 
         // 🔥 AGREGAR ESTOS ESTILOS CSS para las animaciones
         const style = document.createElement('style');
@@ -1409,13 +1259,7 @@
             // Verificar sesión al cargar
             checkSession();
 
-            // Sincronizar bot cuando la pestaña vuelve a estar visible (para móviles)
-            document.addEventListener('visibilitychange', () => {
-                if (document.visibilityState === 'visible') {
-                    console.log('Pestaña visible de nuevo, verificando estado del bot...');
-                    sincronizarBot();
-                }
-            });
+
         });
 
         // ==================== LOGIN ====================
@@ -1756,228 +1600,7 @@ No se ejecutarán más operaciones hoy.`;
             }
         }
 
-        // ==================== BOT AUTOMÁTICO CON PERSISTENCIA ====================
 
-        // Iniciar bot automático CON PERSISTENCIA (versión mejorada)
-        async function iniciarBotAutomatico(silencioso = false) {
-            // Limpiar countdown anterior si existe
-            localStorage.removeItem('bot_countdown');
-            
-            const modo = document.getElementById('accountMode').value;
-            const intervalo = parseInt(document.getElementById('intervalMinutes').value) * 60000;
-            const tipoMonto = document.getElementById('tipoMonto').value;
-            
-            let monto = null;
-            if (tipoMonto === 'fijo') {
-                monto = parseFloat(document.getElementById('tradeAmount').value);
-                if (monto < 1) {
-                    alert('El monto mínimo es $1');
-                    return;
-                }
-            }
-
-            // Solo mostrar confirmación si NO es modo silencioso
-            if (!silencioso) {
-                const confirmar = confirm(`¿Iniciar bot automático en modo ${modo.toUpperCase()} cada ${intervalo/60000} minutos?\n\nRiesgo: ${appState.riesgoConfig.riesgo_porcentaje}%\nStop Diario: ${appState.riesgoConfig.stop_loss_diario}%`);
-                if (!confirmar) return;
-            }
-
-            appState.botRunning = true;
-            mostrarBannerBot();
-            
-            // Ejecutar primera operación inmediatamente
-            ejecutarOperacionAutomatica(monto);
-            
-            // Programar operaciones automáticas
-            appState.intervalId = setInterval(() => {
-                ejecutarOperacionAutomatica(monto);
-            }, intervalo);
-            
-            // Iniciar countdown
-            iniciarCountdown(intervalo);
-            
-            // Guardar configuración del bot en localStorage
-            localStorage.setItem('bot_config', JSON.stringify({
-                running: true,
-                modo: modo,
-                intervalo: intervalo,
-                monto: monto,
-                timestamp: Date.now()
-            }));
-
-            if (silencioso) {
-                mostrarNotificacionBotRestaurado();
-            } else {
-                alert(`✅ Bot automático iniciado\n\nModo: ${modo.toUpperCase()}\nIntervalo: ${intervalo/60000} minutos\nRiesgo: ${appState.riesgoConfig.riesgo_porcentaje}%`);
-            }
-        }
-
-        // Ejecutar operación automática CON AUTENTICACIÓN
-        async function ejecutarOperacionAutomatica(montoFijo = null) {
-            const modo = document.getElementById('accountMode').value;
-
-            try {
-                const res = await fetch('/operar', {
-                    method: 'POST',
-                    headers: getAuthHeaders(),  // ← CORREGIDO: Usar headers de autenticación
-                    body: JSON.stringify({
-                        modo: modo,
-                        monto: montoFijo,
-                        ejecutar_auto: true,
-                        ...appState.riesgoConfig
-                    })
-                });
-
-                const data = await res.json();
-
-                if (data.success) {
-                    // Actualizar estadísticas de riesgo
-                    if (data.estadisticas_riesgo) {
-                        actualizarMonitorRiesgo(data.estadisticas_riesgo);
-                    }
-
-                    // Si la operación no se ejecutó, verificar por qué
-                    if (data.ejecutado === false) {
-                        if (data.decision === 'STOP_LOSS') {
-                            console.log('🛑 STOP LOSS alcanzado. Deteniendo el bot automáticamente.');
-                            alert(`🛑 STOP LOSS DIARIO ALCANZADO\n\nProfit hoy: $${(data.estadisticas_riesgo?.profit_diario || 0).toFixed(2)}\n\nEl bot se detendrá automáticamente.`);
-                            detenerBot(true); // Detención forzada
-                            return; // Salir de la función
-                        }
-                        if (data.decision === 'TAKE_PROFIT') {
-                            console.log('✅ TAKE PROFIT alcanzado. Deteniendo el bot automáticamente.');
-                            alert(`✅ TAKE PROFIT DIARIO ALCANZADO\n\nProfit hoy: $${(data.estadisticas_riesgo?.profit_diario || 0).toFixed(2)}\n\nEl bot se detendrá automáticamente.`);
-                            detenerBot(true); // Detención forzada
-                            return; // Salir de la función
-                        }
-                    }
-
-                    // Solo agregar al historial si se ejecutó
-                    if (data.ejecutado) {
-                        agregarTradeHistorial(data);
-                        actualizarEstadisticas();
-                        
-                        appState.autoTradesCount++;
-                        document.getElementById('autoTradesCount').textContent = appState.autoTradesCount;
-                        
-                        // Actualizar último resultado
-                        if (data.resultado_trade && data.resultado_trade.finalizada) {
-                            const lastResultEl = document.getElementById('lastResult');
-                            if (data.resultado_trade.win) {
-                                lastResultEl.textContent = `+${data.resultado_trade.ganancia.toFixed(2)}`;
-                                lastResultEl.style.color = '#00FF00';
-                            } else {
-                                lastResultEl.textContent = `-${Math.abs(data.resultado_trade.ganancia).toFixed(2)}`;
-                                lastResultEl.style.color = '#FF0000';
-                            }
-                        }
-                    }
-                } else {
-                    console.error('Error en la respuesta del servidor (operación automática):', data.error);
-                }
-
-            } catch (err) {
-                console.error('Error en operación automática:', err);
-            }
-        }
-
-        // Detener bot CON PERSISTENCIA
-        function detenerBot(forzar = false) {
-            // Limpiar countdown del localStorage
-            localStorage.removeItem('bot_countdown');
-
-            const stop = () => {
-                appState.botRunning = false;
-                if (appState.intervalId) {
-                    clearInterval(appState.intervalId);
-                    appState.intervalId = null;
-                }
-                if (appState.countdownId) {
-                    clearInterval(appState.countdownId);
-                    appState.countdownId = null;
-                }
-                ocultarBannerBot();
-                document.getElementById('tradeBtn').textContent = '🚀 INICIAR BOT AUTOMÁTICO';
-                localStorage.removeItem('bot_config');
-                console.log('🤖 Bot detenido.');
-            };
-            
-            if (forzar || confirm('¿Estás seguro de detener el bot automático?')) {
-                stop();
-            }
-        }
-
-        // ==================== FUNCIONES AUXILIARES ====================
-
-        // Mostrar banner del bot
-        function mostrarBannerBot() {
-            document.getElementById('botStatusBanner').classList.add('active');
-            document.getElementById('tradeBtn').textContent = '🟢 BOT EN EJECUCIÓN';
-            document.getElementById('tradeBtn').disabled = true;
-        }
-
-        // Ocultar banner del bot
-        function ocultarBannerBot() {
-            document.getElementById('botStatusBanner').classList.remove('active');
-            document.getElementById('tradeBtn').disabled = false;
-        }
-
-        // Countdown mejorado con persistencia
-        function iniciarCountdown(intervaloMs) {
-            // Intentar restaurar el tiempo restante desde localStorage
-            const countdownData = localStorage.getItem('bot_countdown');
-            let segundosRestantes;
-            
-            if (countdownData) {
-                try {
-                    const data = JSON.parse(countdownData);
-                    const tiempoTranscurrido = Date.now() - data.timestamp;
-                    segundosRestantes = Math.max(0, data.segundosRestantes - Math.floor(tiempoTranscurrido / 1000));
-                    console.log(`🕒 Countdown restaurado: ${segundosRestantes}s restantes`);
-                } catch (e) {
-                    segundosRestantes = intervaloMs / 1000;
-                }
-            } else {
-                segundosRestantes = intervaloMs / 1000;
-            }
-            
-            const actualizarCountdown = () => {
-                if (!appState.botRunning) {
-                    localStorage.removeItem('bot_countdown');
-                    return;
-                }
-                
-                // Guardar estado actual en localStorage
-                localStorage.setItem('bot_countdown', JSON.stringify({
-                    segundosRestantes: segundosRestantes,
-                    timestamp: Date.now(),
-                    intervaloMs: intervaloMs
-                }));
-                
-                const minutos = Math.floor(segundosRestantes / 60);
-                const segundos = Math.floor(segundosRestantes % 60);
-                document.getElementById('nextAnalysis').textContent = 
-                    `${minutos}:${segundos.toString().padStart(2, '0')}`;
-                
-                segundosRestantes--;
-                
-                if (segundosRestantes < 0) {
-                    segundosRestantes = intervaloMs / 1000;
-                    // Limpiar localStorage cuando complete un ciclo
-                    localStorage.removeItem('bot_countdown');
-                }
-            };
-            
-            // Ejecutar inmediatamente para mostrar el tiempo correcto
-            actualizarCountdown();
-            
-            // Limpiar cualquier intervalo anterior
-            if (appState.countdownId) {
-                clearInterval(appState.countdownId);
-            }
-            
-            appState.countdownId = setInterval(actualizarCountdown, 1000);
-        }
 
         // Actualizar monitor de riesgo
         function actualizarMonitorRiesgo(estadisticas) {
