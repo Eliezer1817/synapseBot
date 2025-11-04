@@ -11,6 +11,23 @@ from urllib.parse import urlparse, parse_qs
 from conexion import _connect
 from operar import ejecutar_operacion
 from datetime import datetime
+from database import (
+    init_database,
+    load_database,
+    save_database,
+    agregar_operacion,
+    obtener_historial,
+    actualizar_estadisticas_bot,
+    obtener_estadisticas_bot,
+    guardar_config_bot,
+    detener_bot_servidor,
+    esta_activo_bot_servidor,
+    guardar_credenciales_bot,
+    obtener_credenciales_bot,
+    limpiar_credenciales_bot,
+    guardar_ultima_operacion_bot,
+    obtener_ultima_operacion_bot
+)
 
 PORT = 8000
 CWD = os.path.dirname(os.path.abspath(__file__))
@@ -19,22 +36,16 @@ CWD = os.path.dirname(os.path.abspath(__file__))
 active_sessions = {}
 session_tokens = {}
 
-# 🔥 SISTEMA BOT 24/7 MEJORADO - PERSISTENTE EN SERVIDOR
-bot_servidor_activo = False
-bot_servidor_config = {}
-bot_servidor_thread = None
-bot_servidor_ultima_operacion = None
-bot_servidor_estadisticas = {
-    'operaciones_ejecutadas': 0,
-    'operaciones_exitosas': 0,
-    'ganancia_total': 0.0,
-    'ultima_operacion_timestamp': None,
-    'inicio_timestamp': None,
-    'proxima_operacion_timestamp': None
-}
+# Cargar estado del bot desde la base de datos al iniciar
+db_data = load_database()
 
-# 🔥 NUEVO: Almacenar credenciales para reconexión automática
-bot_servidor_credenciales = None
+# 🔥 SISTEMA BOT 24/7 MEJORADO - PERSISTENTE EN SERVIDOR
+bot_servidor_activo = db_data['bot_servidor']['activo']
+bot_servidor_config = db_data['bot_servidor']['config']
+bot_servidor_thread = None
+bot_servidor_estadisticas = db_data['bot_servidor']['estadisticas']
+
+
 
 class SessionManager:
     SESSION_TIMEOUT = 24 * 3600  # 24 horas
@@ -198,150 +209,108 @@ def obtener_balances_reales(iq):
 # 🔥 NUEVA FUNCIÓN MEJORADA: Bot servidor 24/7 con timing preciso
 def ejecutar_bot_servidor():
     """Ejecuta el bot automático en el servidor de forma continua y precisa"""
-    global bot_servidor_activo, bot_servidor_ultima_operacion, bot_servidor_estadisticas, bot_servidor_credenciales
+    global bot_servidor_thread
     
+    db_data = load_database()
+    bot_config = db_data['bot_servidor']['config']
+    bot_stats = db_data['bot_servidor']['estadisticas']
+    bot_credenciales = obtener_credenciales_bot()
+
+    if not bot_credenciales or not bot_credenciales.get('email') or not bot_credenciales.get('password'):
+        print("❌ ERROR: Credenciales del bot no configuradas. Deteniendo bot.")
+        detener_bot_servidor()
+        return
+
+    try:
+        print(f"🤖 Conectando bot ({bot_credenciales['email']}) a IQ Option...")
+        iq_session = _connect(bot_credenciales['email'], bot_credenciales['password'])
+        print("✅ Bot conectado exitosamente.")
+    except Exception as e:
+        print(f"❌ ERROR FATAL al conectar el bot: {e}")
+        detener_bot_servidor()
+        return
+
+    session_activa = {
+        'email': bot_credenciales['email'],
+        'iq': iq_session
+    }
+
     print(f"\n🎯 INICIANDO BOT SERVIDOR 24/7 - INDEPENDIENTE DEL CLIENTE")
-    print(f"⏰ Intervalo: {bot_servidor_config.get('intervalo', 5)} minutos")
-    print(f"🎮 Modo: {bot_servidor_config.get('modo', 'demo').upper()}")
-    print(f"📊 Configuración riesgo: {bot_servidor_config.get('riesgo_porcentaje', 2)}%")
+    print(f"⏰ Intervalo: {bot_config.get('intervalo', 5)} minutos")
+    print(f"🎮 Modo: {bot_config.get('modo', 'demo').upper()}")
+    print(f"📊 Configuración riesgo: {bot_config.get('riesgo_porcentaje', 2)}%")
     
-    # 🔥 TIMING PRECISO: Calcular el próximo ciclo exacto
-    intervalo_segundos = bot_servidor_config.get('intervalo', 5) * 60
+    intervalo_segundos = bot_config.get('intervalo', 5) * 60
     siguiente_ciclo = time.time()
     
-    # Estadísticas de inicio
-    bot_servidor_estadisticas['inicio_timestamp'] = time.time()
+    bot_stats['inicio_timestamp'] = time.time()
+    actualizar_estadisticas_bot(bot_stats)
     
     ciclo_numero = 0
     
-    while bot_servidor_activo:
+    while esta_activo_bot_servidor():
         try:
             ciclo_numero += 1
             tiempo_actual = time.time()
             
-            # 🔥 TIMING PRECISO: Esperar hasta el próximo ciclo exacto
-            tiempo_espera = siguiente_ciclo - tiempo_actual
-            if tiempo_espera > 0:
-                # Espera precisa en segmentos pequeños para poder detener el bot
-                segmentos = int(tiempo_espera)
-                for i in range(segmentos):
-                    if not bot_servidor_activo:
-                        return
-                    time.sleep(1)
-                if tiempo_espera - segmentos > 0:
-                    time.sleep(tiempo_espera - segmentos)
-            
-            # Calcular próximo ciclo
-            siguiente_ciclo = time.time() + intervalo_segundos
-            bot_servidor_estadisticas['proxima_operacion_timestamp'] = siguiente_ciclo
-            
-            print(f"\n{'='*60}")
-            print(f"🤖 BOT SERVIDOR - CICLO {ciclo_numero}")
-            print(f"{'='*60}")
-            print(f"⏰ Hora actual: {time.strftime('%H:%M:%S')}")
-            print(f"⏰ Próxima operación: {time.strftime('%H:%M:%S', time.localtime(siguiente_ciclo))}")
-            print(f"{'='*60}")
-            
-            # 🔥 RECONEXIÓN AUTOMÁTICA: Si no hay sesión, reconectar
-            session_activa = None
-            for token, session_data in active_sessions.items():
-                session_activa = session_data
-                break
-            
-            if not session_activa and bot_servidor_credenciales:
-                print("🔄 No hay sesión activa, intentando reconexión automática...")
-                try:
-                    email = bot_servidor_credenciales['email']
-                    password = bot_servidor_credenciales['password']
-                    
-                    # Cerrar sesiones existentes
-                    if email in session_tokens:
-                        SessionManager.delete_session_by_email(email)
-                    
-                    # Reconectar
-                    print("⏳ Reconectando a IQ Option...")
-                    iq_session = _connect(email, password)
-                    print("✅ Reconexión exitosa.")
-                    
-                    # Crear nueva sesión
-                    token = SessionManager.create_session(email, iq_session)
-                    session_activa = active_sessions[token]
-                    
-                except Exception as e:
-                    print(f"❌ Error en reconexión automática: {e}")
-                    # Esperar 1 minuto y reintentar en el próximo ciclo
-                    siguiente_ciclo = time.time() + 60
-                    continue
-            
-            if not session_activa:
-                print("❌ No hay sesiones activas y no hay credenciales para reconexión")
-                # Esperar 5 minutos y reintentar
-                siguiente_ciclo = time.time() + 300
-                continue
-            
             print(f"👤 Usuario: {session_activa['email']}")
             
-            # 🔥 VERIFICAR STOP LOSS DIARIO
-            stop_loss_diario = bot_servidor_config.get('stop_loss_diario', 15)
-            if (bot_servidor_estadisticas['ganancia_total'] < -abs(stop_loss_diario) and 
-                bot_servidor_estadisticas['operaciones_ejecutadas'] > 0):
-                print(f"🛑 STOP LOSS DIARIO ACTIVADO: ${bot_servidor_estadisticas['ganancia_total']:.2f}")
+            stop_loss_diario = bot_config.get('stop_loss_diario', 15)
+            if (bot_stats['ganancia_total'] < -abs(stop_loss_diario) and 
+                bot_stats['operaciones_ejecutadas'] > 0):
+                print(f"🛑 STOP LOSS DIARIO ACTIVADO: ${bot_stats['ganancia_total']:.2f}")
                 print("🔴 El bot se detendrá automáticamente")
-                bot_servidor_activo = False
+                detener_bot_servidor()
                 break
             
-            # 🔥 EJECUTAR OPERACIÓN
             resultado = ejecutar_operacion(
                 session_activa['iq'],
-                modo=bot_servidor_config.get('modo', 'demo'),
-                monto=bot_servidor_config.get('monto'),
+                modo=bot_config.get('modo', 'demo'),
+                monto=bot_config.get('monto'),
                 ejecutar_auto=True,
                 forzar_operacion=False,
                 config_riesgo={
-                    'riesgo_porcentaje': bot_servidor_config.get('riesgo_porcentaje', 2.0),
-                    'max_perdidas_consecutivas': bot_servidor_config.get('max_perdidas_consecutivas', 3),
-                    'stop_loss_diario': bot_servidor_config.get('stop_loss_diario', 15),
-                    'monto_maximo': bot_servidor_config.get('monto_maximo', 10)
+                    'riesgo_porcentaje': bot_config.get('riesgo_porcentaje', 2.0),
+                    'max_perdidas_consecutivas': bot_config.get('max_perdidas_consecutivas', 3),
+                    'stop_loss_diario': bot_config.get('stop_loss_diario', 15),
+                    'monto_maximo': bot_config.get('monto_maximo', 10)
                 }
             )
             
-            # 🔥 ACTUALIZAR ESTADÍSTICAS
-            bot_servidor_estadisticas['operaciones_ejecutadas'] += 1
-            bot_servidor_ultima_operacion = {
+            bot_stats['operaciones_ejecutadas'] += 1
+            ultima_operacion = {
                 'timestamp': time.time(),
                 'resultado': resultado,
-                'numero_operacion': bot_servidor_estadisticas['operaciones_ejecutadas'],
+                'numero_operacion': bot_stats['operaciones_ejecutadas'],
                 'ciclo': ciclo_numero
             }
+            guardar_ultima_operacion_bot(ultima_operacion)
             
             if resultado.get('ejecutado'):
-                bot_servidor_estadisticas['operaciones_exitosas'] += 1
+                bot_stats['operaciones_exitosas'] += 1
                 if resultado.get('resultado_trade') and resultado['resultado_trade'].get('finalizada'):
                     ganancia = resultado['resultado_trade'].get('ganancia', 0)
-                    bot_servidor_estadisticas['ganancia_total'] += ganancia
+                    bot_stats['ganancia_total'] += ganancia
                     print(f"💰 Resultado: {'✅ GANANCIA' if ganancia > 0 else '❌ PÉRDIDA'} - ${abs(ganancia):.2f}")
             
-            bot_servidor_estadisticas['ultima_operacion_timestamp'] = time.time()
+            bot_stats['ultima_operacion_timestamp'] = time.time()
+            actualizar_estadisticas_bot(bot_stats)
+            agregar_operacion(resultado)
             
-            # 🔥 MOSTRAR ESTADÍSTICAS ACTUALIZADAS
             print(f"📊 ESTADÍSTICAS BOT 24/7:")
-            print(f"   Operaciones totales: {bot_servidor_estadisticas['operaciones_ejecutadas']}")
-            print(f"   Operaciones exitosas: {bot_servidor_estadisticas['operaciones_exitosas']}")
-            print(f"   Ganancia total: ${bot_servidor_estadisticas['ganancia_total']:.2f}")
+            print(f"   Operaciones totales: {bot_stats['operaciones_ejecutadas']}")
+            print(f"   Operaciones exitosas: {bot_stats['operaciones_exitosas']}")
+            print(f"   Ganancia total: ${bot_stats['ganancia_total']:.2f}")
             print(f"   Stop loss diario: ${stop_loss_diario}")
             print(f"⏳ Próxima operación: {time.strftime('%H:%M:%S', time.localtime(siguiente_ciclo))}")
             print(f"{'='*60}\n")
-                
         except Exception as e:
             print(f"❌ ERROR en bot servidor: {e}")
             traceback.print_exc()
-            # En caso de error, esperar 2 minutos antes de reintentar
             siguiente_ciclo = time.time() + 120
-    
+                
     print("🛑 BOT SERVIDOR DETENIDO")
-    # Limpiar credenciales por seguridad
-    bot_servidor_credenciales = None
-
+    
 class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
     
     def log_message(self, format, *args):
@@ -382,8 +351,11 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                 }).encode('utf-8'))
                 return
             
-            # Calcular tiempo hasta próxima operación
-            proxima_operacion = bot_servidor_estadisticas.get('proxima_operacion_timestamp')
+            db_data = load_database()
+            bot_stats = db_data['bot_servidor']['estadisticas']
+            bot_config = db_data['bot_servidor']['config']
+            
+            proxima_operacion = bot_stats.get('proxima_operacion_timestamp')
             tiempo_restante = None
             if proxima_operacion:
                 tiempo_restante = max(0, proxima_operacion - time.time())
@@ -393,15 +365,53 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({
                 'success': True,
-                'bot_activo': bot_servidor_activo,
-                'config': bot_servidor_config,
-                'estadisticas': bot_servidor_estadisticas,
-                'ultima_operacion': bot_servidor_ultima_operacion,
-                'ultima_operacion_timestamp': bot_servidor_estadisticas['ultima_operacion_timestamp'],
+                'bot_activo': db_data['bot_servidor']['activo'],
+                'config': bot_config,
+                'estadisticas': bot_stats,
+                'ultima_operacion': obtener_ultima_operacion_bot(),
+                'ultima_operacion_timestamp': bot_stats['ultima_operacion_timestamp'],
                 'proxima_operacion_timestamp': proxima_operacion,
                 'tiempo_restante_segundos': tiempo_restante,
-                'intervalo': bot_servidor_config.get('intervalo', 5)
+                'intervalo': bot_config.get('intervalo', 5)
             }).encode('utf-8'))
+            return
+
+        elif self.path == '/historial_operaciones':
+            session = get_authenticated_session(self)
+            if not session:
+                self.send_response(401)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'success': False,
+                    'error': 'No autorizado'
+                }).encode('utf-8'))
+                return
+            
+            try:
+                # Obtener el límite de operaciones desde los parámetros de la URL
+                query_components = parse_qs(urlparse(self.path).query)
+                limit = int(query_components.get("limit", [50])[0])
+
+                historial = obtener_historial(limit=limit)
+                
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'success': True,
+                    'historial': historial
+                }).encode('utf-8'))
+
+            except Exception as e:
+                print(f"❌ Error en /historial_operaciones: {e}")
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'success': False,
+                    'error': 'Error al obtener el historial'
+                }).encode('utf-8'))
             return
 
         elif self.path == '/check_session':
@@ -449,8 +459,8 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({
                 'active_sessions_count': len(active_sessions),
                 'session_tokens_count': len(session_tokens),
-                'bot_activo': bot_servidor_activo,
-                'bot_tiene_credenciales': bot_servidor_credenciales is not None
+                'bot_activo': esta_activo_bot_servidor(),
+                'bot_tiene_credenciales': obtener_credenciales_bot() is not None
             }).encode('utf-8'))
             return
         
@@ -486,7 +496,7 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
             self.send_error(500, f'Server Error: {e}')
 
     def do_POST(self):
-        global bot_servidor_activo, bot_servidor_config, bot_servidor_thread, bot_servidor_estadisticas, bot_servidor_credenciales
+        global bot_servidor_thread
         
         try:
             if self.path == '/login':
@@ -690,6 +700,9 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                         'demo': demo_balance
                     }
                     
+                    # Guardar operación en la base de datos
+                    agregar_operacion(resultado)
+                    
                     self.send_response(200)
                     self.send_header('Content-type', 'application/json')
                     self.end_headers()
@@ -724,28 +737,26 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                     if not session:
                         raise Exception("No hay sesión activa")
                     
-                    if bot_servidor_activo:
+                    if esta_activo_bot_servidor():
                         raise Exception("El bot servidor ya está activo")
                     
                     content_length = int(self.headers.get('Content-Length', 0))
                     post_data = self.rfile.read(content_length) if content_length > 0 else b'{}'
                     config = json.loads(post_data.decode('utf-8'))
                     
-                    # 🔥 GUARDAR CREDENCIALES PARA RECONEXIÓN AUTOMÁTICA
-                    bot_servidor_credenciales = {
+                    credenciales = {
                         'email': session['email'],
-                        'password': config.get('password')  # El frontend debe enviar el password
+                        'password': config.get('password')
                     }
                     
-                    if not bot_servidor_credenciales['password']:
+                    if not credenciales['password']:
                         raise Exception("Se requiere password para el bot 24/7")
                     
-                    # Guardar configuración
-                    bot_servidor_config = config
-                    bot_servidor_activo = True
+                    guardar_credenciales_bot(credenciales)
+                    guardar_config_bot(config)
                     
-                    # Reiniciar estadísticas
-                    bot_servidor_estadisticas = {
+                    # Reiniciar estadísticas en la base de datos
+                    nuevas_estadisticas = {
                         'operaciones_ejecutadas': 0,
                         'operaciones_exitosas': 0,
                         'ganancia_total': 0.0,
@@ -753,8 +764,8 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                         'inicio_timestamp': time.time(),
                         'proxima_operacion_timestamp': None
                     }
+                    actualizar_estadisticas_bot(nuevas_estadisticas)
                     
-                    # Iniciar thread del bot
                     bot_servidor_thread = threading.Thread(target=ejecutar_bot_servidor)
                     bot_servidor_thread.daemon = True
                     bot_servidor_thread.start()
@@ -790,11 +801,11 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                     if not session:
                         raise Exception("No hay sesión activa")
                     
-                    if not bot_servidor_activo:
+                    if not esta_activo_bot_servidor():
                         raise Exception("El bot servidor no está activo")
                     
-                    bot_servidor_activo = False
-                    bot_servidor_credenciales = None  # Limpiar credenciales
+                    detener_bot_servidor()
+                    limpiar_credenciales_bot()  # Limpiar credenciales
                     
                     print(f"🛑 BOT 24/7 DETENIDO por {session['email']}")
                     
@@ -804,7 +815,7 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                     self.wfile.write(json.dumps({
                         'success': True,
                         'message': 'Bot servidor detenido',
-                        'estadisticas_finales': bot_servidor_estadisticas
+                        'estadisticas_finales': obtener_estadisticas_bot()
                     }).encode('utf-8'))
                     
                 except Exception as e:
@@ -878,8 +889,18 @@ def cleanup_sessions_periodically():
         SessionManager.cleanup_expired_sessions()
 
 def run_server(port=PORT):
-    global bot_servidor_activo, bot_servidor_thread
-    
+    global bot_servidor_thread
+
+    # Inicializar la base de datos
+    init_database()
+
+    # Si el bot estaba activo, reiniciar el thread
+    if esta_activo_bot_servidor():
+        print("🤖 Reiniciando el bot servidor...")
+        bot_servidor_thread = threading.Thread(target=ejecutar_bot_servidor)
+        bot_servidor_thread.daemon = True
+        bot_servidor_thread.start()
+
     # Iniciar limpieza de sesiones
     cleanup_thread = threading.Thread(target=cleanup_sessions_periodically)
     cleanup_thread.daemon = True
@@ -914,9 +935,9 @@ def run_server(port=PORT):
     except KeyboardInterrupt:
         print("\n\n🛑 Servidor detenido")
         # Detener bot servidor si está activo
-        if bot_servidor_activo:
+        if esta_activo_bot_servidor():
             print("🛑 Deteniendo bot servidor...")
-            bot_servidor_activo = False
+            detener_bot_servidor()
             if bot_servidor_thread and bot_servidor_thread.is_alive():
                 bot_servidor_thread.join(timeout=10)
         
