@@ -14,6 +14,8 @@ def init_database():
             'bot_servidor': {
                 'activo': False,
                 'config': {},
+                'credenciales': None,
+                'ultima_operacion': None,
                 'estadisticas': {
                     'operaciones_ejecutadas': 0,
                     'operaciones_exitosas': 0,
@@ -80,6 +82,34 @@ def guardar_config_bot(config):
     data = load_database()
     data['bot_servidor']['config'] = config
     data['bot_servidor']['activo'] = True
+    save_database(data)
+
+def obtener_credenciales_bot():
+    """Obtener credenciales del bot servidor"""
+    data = load_database()
+    return data['bot_servidor'].get('credenciales')
+
+def guardar_credenciales_bot(credenciales):
+    """Guardar credenciales del bot servidor"""
+    data = load_database()
+    data['bot_servidor']['credenciales'] = credenciales
+    save_database(data)
+
+def obtener_ultima_operacion_bot():
+    """Obtener la última operación del bot servidor"""
+    data = load_database()
+    return data['bot_servidor'].get('ultima_operacion')
+
+def guardar_ultima_operacion_bot(operacion):
+    """Guardar la última operación del bot servidor"""
+    data = load_database()
+    data['bot_servidor']['ultima_operacion'] = operacion
+    save_database(data)
+
+def limpiar_credenciales_bot():
+    """Limpiar credenciales del bot servidor"""
+    data = load_database()
+    data['bot_servidor']['credenciales'] = None
     save_database(data)
 
 def detener_bot_servidor():
