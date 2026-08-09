@@ -13,7 +13,7 @@ from operar import ejecutar_operacion
 from datetime import datetime
 import database  # ✅ Importación correcta
 
-PORT = 8000
+PORT = int(os.environ.get("PORT", 8000))
 CWD = os.path.dirname(os.path.abspath(__file__))
 
 # Sistema de sesiones mejorado
