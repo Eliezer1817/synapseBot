@@ -122,6 +122,12 @@ El autor no se hace responsable de pérdidas financieras.
 
 --------------------------------------------------------------------
 
+## Demo en video
+
+Mira la demo de SynapseBot aquí:  
+[Ver video en Google Drive](https://drive.google.com/file/d/1WY7wDEHy-1ZkKCqh2QhoCtn9iILM3vRI/view?usp=drivesdk)
+
+
 📄 Licencia
 Proyecto privado / uso personal.
 Contacto: Eliezer1817
