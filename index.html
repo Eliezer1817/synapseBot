@@ -1,1516 +1,1994 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-<title>SYNAPSE_CORE · Trading Bot Dashboard</title>
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
-<style>
-:root {
-  --neon: #ff5a00;
-  --neon-bright: #ff8a2b;
-  --neon-dim: #c43d00;
-  --neon-glow: rgba(255, 90, 0, 0.7);
-  --green: #3ddc84;
-  --green-glow: rgba(61, 220, 132, 0.5);
-  --red: #ff3d3d;
-  --red-glow: rgba(255, 61, 61, 0.5);
-  --blue: #0066ff;
-  --blue-glow: rgba(0, 102, 255, 0.5);
-  --bg: #030303;
-}
-* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html { scroll-behavior: smooth; background: var(--bg); }
-body {
-  font-family: 'Share Tech Mono', monospace;
-  color: #e8e8e8;
-  background: var(--bg);
-  overflow-x: hidden;
-  line-height: 1.5;
-}
-
-/* ===== FIXED VIDEO LAYER ===== */
-.video-stage {
-  position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
-}
-.bg-video {
-  width: 100%; height: 100%; object-fit: cover; object-position: center 15%;
-  filter: contrast(1.1) brightness(0.85) saturate(1.1);
-  transform: scale(1.08); will-change: transform, filter, opacity;
-}
-.video-vignette {
-  position: absolute; inset: 0;
-  background: radial-gradient(ellipse 85% 70% at 50% 30%, transparent 20%, rgba(0,0,0,0.55) 100%),
-              linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, transparent 30%, transparent 50%, rgba(3,3,3,0.95) 100%);
-  transition: opacity 0.4s;
-}
-.video-scan {
-  position: absolute; inset: 0;
-  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.08) 2px, rgba(0,0,0,0.08) 4px);
-  opacity: 0.2; pointer-events: none;
-}
-#fx { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
-
-/* Progress bar */
-.scroll-progress {
-  position: fixed; top: 0; left: 0; height: 2px; z-index: 100;
-  background: linear-gradient(90deg, var(--neon), var(--neon-bright));
-  width: 0%; box-shadow: 0 0 12px var(--neon-glow); transition: width 0.05s linear;
-}
-.chapter-nav {
-  position: fixed; right: 0.8rem; top: 50%; transform: translateY(-50%); z-index: 90;
-  display: flex; flex-direction: column; gap: 0.7rem;
-}
-.chapter-nav button {
-  width: 8px; height: 8px; border-radius: 50%; border: 1px solid rgba(255,90,0,0.4);
-  background: transparent; cursor: pointer; padding: 0; transition: all 0.35s;
-}
-.chapter-nav button.active {
-  background: var(--neon); box-shadow: 0 0 12px var(--neon-glow); transform: scale(1.35);
-}
-
-/* ===== LANDING STYLES ===== */
-.story { position: relative; z-index: 10; }
-.chapter {
-  min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column;
-  justify-content: center; align-items: center; padding: 2rem 1.2rem;
-  position: relative; perspective: 1000px;
-}
-.chapter-hero { justify-content: flex-end; padding-bottom: 2.5rem; }
-.top-bar {
-  position: absolute; top: 0; left: 0; right: 0; display: flex;
-  justify-content: space-between; align-items: center; padding: 1rem 1.25rem; z-index: 20;
-}
-.logo-mark {
-  font-family: 'Orbitron', sans-serif; font-size: 0.7rem; letter-spacing: 0.18em;
-  color: var(--neon); text-shadow: 0 0 14px var(--neon-glow);
-  display: flex; align-items: center; gap: 0.4rem;
-}
-.logo-mark .dot {
-  width: 7px; height: 7px; border-radius: 50%; background: var(--neon);
-  box-shadow: 0 0 10px var(--neon-glow); animation: pulse-dot 2s ease-in-out infinite;
-}
-@keyframes pulse-dot { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
-
-.panel {
-  width: 100%; max-width: 400px;
-  background: linear-gradient(155deg, rgba(255,255,255,0.08), rgba(12,12,18,0.42) 50%, rgba(5,5,10,0.5));
-  backdrop-filter: blur(28px) saturate(1.6); -webkit-backdrop-filter: blur(28px) saturate(1.6);
-  border: 1px solid rgba(255,170,100,0.22); border-radius: 18px;
-  padding: 1.35rem 1.15rem 1.15rem;
-  box-shadow: 0 28px 60px rgba(0,0,0,0.5), 0 0 40px rgba(255,90,0,0.08), inset 0 1px 1px rgba(255,255,255,0.12);
-  opacity: 0; transform: translateX(-50px) rotateY(18deg) scale(0.94);
-  transition: opacity 1s cubic-bezier(0.16,1,0.3,1), transform 1s cubic-bezier(0.16,1,0.3,1);
-  transform-style: preserve-3d;
-}
-.chapter-hero.in-view .panel { opacity: 1; transform: translateX(0) rotateY(0) scale(1); }
-.panel::after {
-  content: ''; position: absolute; top: 0; left: 12%; right: 12%; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,180,120,0.85), var(--neon), transparent);
-  box-shadow: 0 0 12px var(--neon-glow);
-}
-.brand {
-  font-family: 'Orbitron', sans-serif; font-size: 0.52rem; letter-spacing: 0.26em;
-  color: var(--neon); margin-bottom: 0.35rem; text-shadow: 0 0 12px var(--neon-glow);
-}
-.headline {
-  font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 1.32rem;
-  line-height: 1.15; margin-bottom: 0.45rem; color: #fff;
-}
-.headline .accent { color: var(--neon); text-shadow: 0 0 14px var(--neon-glow); }
-.tagline { font-size: 0.58rem; letter-spacing: 0.05em; color: rgba(255,255,255,0.48); margin-bottom: 0.9rem; text-transform: uppercase; }
-.status-line {
-  display: flex; gap: 0.4rem; align-items: flex-start; font-size: 0.56rem;
-  color: rgba(255,255,255,0.45); margin-bottom: 1rem;
-}
-.status-line .bar {
-  width: 3px; height: 1.5em; background: var(--neon); border-radius: 2px;
-  box-shadow: 0 0 8px var(--neon-glow); animation: bar-life 1.5s ease-in-out infinite;
-}
-@keyframes bar-life { 0%,100%{opacity:1} 40%{opacity:0.25} }
-
-.field { margin-bottom: 0.75rem; }
-.field label { display: block; font-size: 0.5rem; letter-spacing: 0.16em; color: rgba(255,255,255,0.38); margin-bottom: 0.25rem; text-transform: uppercase; }
-.input-wrap input {
-  width: 100%; background: rgba(0,0,0,0.45); border: 1px solid rgba(255,150,90,0.18);
-  border-radius: 10px; padding: 0.7rem 0.85rem; color: #fff;
-  font-family: inherit; font-size: 0.82rem; outline: none;
-  transition: border-color 0.3s, box-shadow 0.3s;
-}
-.input-wrap input:focus {
-  border-color: var(--neon); box-shadow: 0 0 0 1px var(--neon), 0 0 20px rgba(255,90,0,0.25);
-}
-.input-wrap { position: relative; }
-.input-wrap .eye {
-  position: absolute; right: 0.65rem; top: 50%; transform: translateY(-50%);
-  color: rgba(255,255,255,0.35); cursor: pointer; font-size: 0.85rem;
-}
-.btn-core {
-  width: 100%; margin-top: 0.3rem; padding: 0.82rem;
-  background: linear-gradient(135deg, var(--neon-bright), var(--neon) 50%, var(--neon-dim));
-  border: none; border-radius: 10px; color: #0a0a0a;
-  font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 0.7rem;
-  letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer;
-  box-shadow: 0 0 20px rgba(255,90,0,0.4); transition: transform 0.25s, box-shadow 0.25s;
-}
-.btn-core:hover { transform: translateY(-2px); box-shadow: 0 0 36px rgba(255,90,0,0.65); }
-.btn-core:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-
-.panel-footer {
-  display: flex; justify-content: space-between; align-items: center;
-  margin-top: 0.9rem; padding-top: 0.7rem; border-top: 1px solid rgba(255,255,255,0.06); font-size: 0.48rem;
-}
-.enc { color: var(--green); letter-spacing: 0.06em; }
-.force-logout { color: rgba(255,255,255,0.28); max-width: 55%; text-align: right; cursor: pointer; transition: color 0.3s; }
-.force-logout:hover { color: var(--neon); }
-
-/* Story chapters */
-.story-block {
-  max-width: 420px; width: 100%; text-align: center; opacity: 0;
-  transition: opacity 0.95s cubic-bezier(0.16,1,0.3,1), transform 0.95s cubic-bezier(0.16,1,0.3,1);
-  transform-style: preserve-3d; perspective: 800px;
-}
-.chapter:nth-child(even) .story-block { transform: translateX(-70px) rotateY(28deg) rotateZ(-4deg) scale(0.92); }
-.chapter:nth-child(odd) .story-block { transform: translateX(70px) rotateY(-28deg) rotateZ(4deg) scale(0.92); }
-.chapter.in-view .story-block { opacity: 1; transform: translateX(0) rotateY(0) rotateZ(0) scale(1); }
-
-.chapter-label {
-  font-family: 'Orbitron', sans-serif; font-size: 0.5rem; letter-spacing: 0.28em;
-  color: var(--neon); margin-bottom: 0.8rem; text-transform: uppercase; text-shadow: 0 0 12px var(--neon-glow);
-}
-.story-title {
-  font-family: 'Orbitron', sans-serif; font-size: clamp(1.4rem, 5vw, 2rem);
-  font-weight: 700; line-height: 1.2; margin-bottom: 1rem; color: #fff;
-}
-.story-title .hl { color: var(--neon); text-shadow: 0 0 20px var(--neon-glow); }
-.story-text { font-size: 0.8rem; color: rgba(255,255,255,0.55); line-height: 1.7; margin-bottom: 1.5rem; }
-.story-glass {
-  background: rgba(0,0,0,0.35); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255,90,0,0.15); border-radius: 16px;
-  padding: 1.5rem 1.3rem; box-shadow: 0 20px 50px rgba(0,0,0,0.4);
-}
-
-.stats-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; margin-top: 0.5rem; }
-@media (min-width: 500px) { .stats-row { grid-template-columns: repeat(4, 1fr); } }
-.stat-pill {
-  background: rgba(255,90,0,0.06); border: 1px solid rgba(255,90,0,0.18);
-  border-radius: 12px; padding: 0.9rem 0.5rem; text-align: center; opacity: 0;
-  transition: all 0.7s cubic-bezier(0.16,1,0.3,1); transform-style: preserve-3d;
-}
-.stat-pill:nth-child(odd) { transform: translateX(-40px) rotateY(22deg) scale(0.9); }
-.stat-pill:nth-child(even) { transform: translateX(40px) rotateY(-22deg) scale(0.9); }
-.chapter.in-view .stat-pill { opacity: 1; transform: translateX(0) rotateY(0) scale(1); }
-.chapter.in-view .stat-pill:nth-child(1) { transition-delay: 0.1s; }
-.chapter.in-view .stat-pill:nth-child(2) { transition-delay: 0.2s; }
-.chapter.in-view .stat-pill:nth-child(3) { transition-delay: 0.3s; }
-.chapter.in-view .stat-pill:nth-child(4) { transition-delay: 0.4s; }
-.stat-pill .v { font-family: 'Orbitron', sans-serif; font-size: 1.15rem; font-weight: 700; color: var(--neon); text-shadow: 0 0 14px var(--neon-glow); display: block; }
-.stat-pill .l { font-size: 0.45rem; letter-spacing: 0.1em; color: rgba(255,255,255,0.4); text-transform: uppercase; margin-top: 0.25rem; }
-
-.steps { display: flex; flex-direction: column; gap: 0.9rem; text-align: left; }
-.step {
-  display: flex; gap: 0.9rem; align-items: flex-start; opacity: 0;
-  transition: all 0.75s cubic-bezier(0.16,1,0.3,1); transform-style: preserve-3d;
-}
-.step:nth-child(odd) { transform: translateX(-55px) rotateY(18deg); }
-.step:nth-child(even) { transform: translateX(55px) rotateY(-18deg); }
-.chapter.in-view .step { opacity: 1; transform: translateX(0) rotateY(0); }
-.chapter.in-view .step:nth-child(1) { transition-delay: 0.15s; }
-.chapter.in-view .step:nth-child(2) { transition-delay: 0.3s; }
-.chapter.in-view .step:nth-child(3) { transition-delay: 0.45s; }
-.chapter.in-view .step:nth-child(4) { transition-delay: 0.6s; }
-.step-num { font-family: 'Orbitron', sans-serif; font-size: 0.9rem; color: var(--neon); text-shadow: 0 0 10px var(--neon-glow); min-width: 1.6rem; }
-.step h4 { font-family: 'Orbitron', sans-serif; font-size: 0.68rem; letter-spacing: 0.06em; margin-bottom: 0.2rem; }
-.step p { font-size: 0.65rem; color: rgba(255,255,255,0.45); line-height: 1.5; }
-
-.live-box { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,90,0,0.18); border-radius: 14px; padding: 1rem; margin-top: 1rem; }
-.live-head { display: flex; justify-content: space-between; font-size: 0.55rem; letter-spacing: 0.1em; margin-bottom: 0.7rem; }
-.live-head .pair { color: var(--neon); font-family: 'Orbitron', sans-serif; }
-.live-head .badge { color: var(--green); display: flex; align-items: center; gap: 0.3rem; }
-.live-head .badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse-dot 1.4s ease-in-out infinite; }
-#miniChart { width: 100%; height: 110px; display: block; }
-.live-metrics { display: grid; grid-template-columns: repeat(3,1fr); gap: 0.5rem; margin-top: 0.7rem; }
-.metric { text-align: center; padding: 0.45rem; background: rgba(255,255,255,0.03); border-radius: 8px; }
-.metric .mv { font-family: 'Orbitron', sans-serif; font-size: 0.8rem; color: var(--neon); }
-.metric .ml { font-size: 0.45rem; color: rgba(255,255,255,0.35); letter-spacing: 0.08em; text-transform: uppercase; }
-
-.cta-btn {
-  display: inline-block; margin-top: 0.5rem; padding: 0.9rem 1.8rem;
-  background: linear-gradient(135deg, var(--neon-bright), var(--neon)); border: none; border-radius: 12px;
-  color: #0a0a0a; font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 0.72rem;
-  letter-spacing: 0.12em; text-transform: uppercase; text-decoration: none;
-  box-shadow: 0 0 28px rgba(255,90,0,0.45); transition: transform 0.25s, box-shadow 0.25s;
-}
-.cta-btn:hover { transform: translateY(-3px); box-shadow: 0 0 44px rgba(255,90,0,0.7); }
-
-.site-footer {
-  position: relative; z-index: 10; background: rgba(4,4,4,0.92);
-  border-top: 1px solid rgba(255,90,0,0.12); padding: 2.8rem 1.25rem 2rem;
-  backdrop-filter: blur(20px);
-}
-.footer-inner { max-width: 920px; margin: 0 auto; display: grid; grid-template-columns: 1fr; gap: 1.8rem; }
-@media (min-width: 700px) { .footer-inner { grid-template-columns: 1.4fr 1fr 1fr 1.15fr; } }
-.footer-brand .logo { font-family: 'Orbitron', sans-serif; font-size: 0.8rem; letter-spacing: 0.12em; color: var(--neon); margin-bottom: 0.6rem; text-shadow: 0 0 12px var(--neon-glow); }
-.footer-brand p { font-size: 0.65rem; color: rgba(255,255,255,0.4); line-height: 1.55; margin-bottom: 0.9rem; max-width: 240px; }
-.socials { display: flex; gap: 0.6rem; flex-wrap: wrap; }
-.socials a {
-  width: 32px; height: 32px; border-radius: 50%; border: 1px solid rgba(255,90,0,0.25);
-  display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.5);
-  text-decoration: none; font-size: 0.8rem; transition: all 0.3s; background: rgba(255,255,255,0.02);
-}
-.socials a:hover { color: var(--neon); border-color: var(--neon); box-shadow: 0 0 12px var(--neon-glow); }
-.footer-col h4 { font-family: 'Orbitron', sans-serif; font-size: 0.55rem; letter-spacing: 0.16em; color: var(--neon); margin-bottom: 0.8rem; text-transform: uppercase; }
-.footer-col ul { list-style: none; }
-.footer-col li { margin-bottom: 0.4rem; }
-.footer-col a { font-size: 0.65rem; color: rgba(255,255,255,0.4); text-decoration: none; transition: color 0.25s; }
-.footer-col a:hover { color: var(--neon); }
-.status-box { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,90,0,0.15); border-radius: 12px; padding: 0.95rem 1rem; }
-.status-box .s-label { font-size: 0.48rem; letter-spacing: 0.12em; color: rgba(255,255,255,0.35); text-transform: uppercase; margin-bottom: 0.3rem; }
-.status-box .s-name { font-family: 'Orbitron', sans-serif; font-size: 0.6rem; letter-spacing: 0.08em; color: rgba(255,255,255,0.45); margin-bottom: 0.35rem; }
-.status-box .s-online { font-family: 'Orbitron', sans-serif; font-size: 1.1rem; font-weight: 700; color: var(--green); text-shadow: 0 0 16px rgba(61,220,132,0.5); letter-spacing: 0.06em; }
-.status-box .s-sub { font-size: 0.5rem; color: rgba(255,255,255,0.28); margin-top: 0.35rem; }
-.footer-bottom {
-  max-width: 920px; margin: 2rem auto 0; padding-top: 1.2rem;
-  border-top: 1px solid rgba(255,255,255,0.05); text-align: center;
-  font-size: 0.52rem; color: rgba(255,255,255,0.22); letter-spacing: 0.08em;
-}
-.sound-btn {
-  position: fixed; bottom: 1rem; left: 1rem; z-index: 95; background: rgba(0,0,0,0.55);
-  border: 1px solid rgba(255,90,0,0.35); color: var(--neon);
-  font-family: 'Orbitron', sans-serif; font-size: 0.5rem; letter-spacing: 0.1em;
-  padding: 0.4rem 0.7rem; border-radius: 16px; backdrop-filter: blur(10px);
-  cursor: pointer; text-transform: uppercase;
-}
-.sound-btn.active { color: var(--green); border-color: rgba(61,220,132,0.45); }
-.scroll-hint {
-  position: absolute; bottom: 1.2rem; left: 50%; transform: translateX(-50%);
-  font-size: 0.5rem; letter-spacing: 0.2em; color: rgba(255,255,255,0.35);
-  text-transform: uppercase; animation: hint-bob 2s ease-in-out infinite; pointer-events: none;
-}
-@keyframes hint-bob { 0%,100% { transform: translateX(-50%) translateY(0); opacity: 0.35; } 50% { transform: translateX(-50%) translateY(6px); opacity: 0.7; } }
-
-/* ==================== DASHBOARD FUTURISTA ==================== */
-.hidden { display: none !important; }
-
-.landing-hidden .story,
-.landing-hidden .chapter-nav,
-.landing-hidden .scroll-progress,
-.landing-hidden .site-footer,
-.landing-hidden .scroll-hint {
-  display: none !important;
-}
-
-/* Dashboard container */
-.dashboard {
-  animation: fadeInDash 0.8s cubic-bezier(0.16,1,0.3,1);
-  min-height: 100vh;
-  position: relative;
-  z-index: 20;
-  padding: 2rem 1.2rem;
-  padding-bottom: 4rem;
-}
-@keyframes fadeInDash {
-  from { opacity: 0; transform: translateY(30px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.dash-container { max-width: 1200px; margin: 0 auto; }
-
-/* Top Bar Dashboard */
-.top-bar-dash {
-  background: linear-gradient(155deg, rgba(255,255,255,0.08), rgba(12,12,18,0.42) 50%, rgba(5,5,10,0.5));
-  backdrop-filter: blur(28px) saturate(1.6); -webkit-backdrop-filter: blur(28px) saturate(1.6);
-  border: 1px solid rgba(255,170,100,0.22); border-radius: 18px;
-  padding: 1.2rem 1.5rem; margin-bottom: 1.5rem;
-  box-shadow: 0 28px 60px rgba(0,0,0,0.5), 0 0 40px rgba(255,90,0,0.08);
-  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;
-  position: relative;
-}
-.top-bar-dash::after {
-  content: ''; position: absolute; top: 0; left: 12%; right: 12%; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,180,120,0.85), var(--neon), transparent);
-  box-shadow: 0 0 12px var(--neon-glow);
-}
-.user-info { display: flex; align-items: center; gap: 1rem; }
-.status-dot {
-  width: 10px; height: 10px; background: var(--green); border-radius: 50%;
-  box-shadow: 0 0 10px var(--green-glow); animation: pulse-dot 2s ease-in-out infinite;
-}
-.user-name {
-  font-family: 'Orbitron', sans-serif; font-size: 1rem; font-weight: 700; color: #fff;
-  letter-spacing: 0.05em;
-}
-.user-status { font-size: 0.6rem; color: var(--green); letter-spacing: 0.08em; }
-.dash-actions { display: flex; gap: 0.8rem; flex-wrap: wrap; }
-.btn-dash {
-  padding: 0.5rem 1rem; background: rgba(255,90,0,0.1); border: 1px solid rgba(255,90,0,0.3);
-  border-radius: 8px; color: var(--neon); font-family: 'Orbitron', sans-serif;
-  font-size: 0.6rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
-  cursor: pointer; transition: all 0.3s; backdrop-filter: blur(10px);
-}
-.btn-dash:hover {
-  background: rgba(255,90,0,0.2); border-color: var(--neon);
-  box-shadow: 0 0 20px rgba(255,90,0,0.3); transform: translateY(-2px);
-}
-.btn-dash.danger { border-color: rgba(255,61,61,0.3); color: var(--red); }
-.btn-dash.danger:hover { background: rgba(255,61,61,0.2); border-color: var(--red); box-shadow: 0 0 20px var(--red-glow); }
-
-/* Stats Grid */
-.stats-grid {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 1rem; margin-bottom: 1.5rem;
-}
-.stat-card {
-  background: linear-gradient(155deg, rgba(255,255,255,0.06), rgba(12,12,18,0.4) 50%, rgba(5,5,10,0.45));
-  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255,170,100,0.18); border-radius: 14px;
-  padding: 1.2rem; text-align: center;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.4), 0 0 20px rgba(255,90,0,0.05);
-  transition: all 0.3s; position: relative; overflow: hidden;
-}
-.stat-card:hover {
-  border-color: rgba(255,90,0,0.4); box-shadow: 0 20px 40px rgba(0,0,0,0.4), 0 0 30px rgba(255,90,0,0.15);
-  transform: translateY(-3px);
-}
-.stat-card::before {
-  content: ''; position: absolute; top: 0; left: 20%; right: 20%; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,180,120,0.6), transparent);
-}
-.stat-label {
-  font-size: 0.5rem; letter-spacing: 0.12em; color: rgba(255,255,255,0.4);
-  text-transform: uppercase; margin-bottom: 0.6rem;
-}
-.stat-value {
-  font-family: 'Orbitron', sans-serif; font-size: 1.4rem; font-weight: 700;
-  color: var(--neon); text-shadow: 0 0 14px var(--neon-glow);
-}
-.stat-value.positive { color: var(--green); text-shadow: 0 0 14px var(--green-glow); }
-.stat-value.negative { color: var(--red); text-shadow: 0 0 14px var(--red-glow); }
-
-/* Control Panel */
-.control-panel {
-  background: linear-gradient(155deg, rgba(255,255,255,0.06), rgba(12,12,18,0.4) 50%, rgba(5,5,10,0.45));
-  backdrop-filter: blur(28px) saturate(1.6); -webkit-backdrop-filter: blur(28px) saturate(1.6);
-  border: 1px solid rgba(255,170,100,0.22); border-radius: 18px;
-  padding: 1.5rem; margin-bottom: 1.5rem;
-  box-shadow: 0 28px 60px rgba(0,0,0,0.5), 0 0 40px rgba(255,90,0,0.08);
-  position: relative;
-}
-.control-panel::after {
-  content: ''; position: absolute; top: 0; left: 12%; right: 12%; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,180,120,0.85), var(--neon), transparent);
-  box-shadow: 0 0 12px var(--neon-glow);
-}
-.panel-title {
-  font-family: 'Orbitron', sans-serif; font-size: 1.1rem; font-weight: 700;
-  color: var(--neon); text-shadow: 0 0 12px var(--neon-glow);
-  margin-bottom: 1.2rem; letter-spacing: 0.05em;
-}
-.control-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-.control-item {
-  background: rgba(0,0,0,0.35); border: 1px solid rgba(255,90,0,0.12);
-  border-radius: 10px; padding: 1rem;
-}
-.control-label {
-  font-size: 0.55rem; letter-spacing: 0.1em; color: rgba(255,255,255,0.4);
-  text-transform: uppercase; margin-bottom: 0.6rem; display: block;
-}
-.control-select, .control-input {
-  width: 100%; padding: 0.6rem 0.8rem; background: rgba(0,0,0,0.5);
-  border: 1px solid rgba(255,150,90,0.18); border-radius: 8px;
-  color: #fff; font-family: 'Share Tech Mono', monospace; font-size: 0.8rem;
-  outline: none; transition: all 0.3s;
-}
-.control-select:focus, .control-input:focus {
-  border-color: var(--neon); box-shadow: 0 0 0 1px var(--neon), 0 0 15px rgba(255,90,0,0.2);
-}
-
-/* Risk Config Section */
-.risk-config-section {
-  background: rgba(0,0,0,0.4); border: 1px solid rgba(61,220,132,0.25);
-  border-radius: 14px; padding: 1.2rem; margin: 1.2rem 0;
-  box-shadow: 0 0 25px rgba(61,220,132,0.08);
-}
-.risk-config-section h3 {
-  font-family: 'Orbitron', sans-serif; font-size: 0.9rem; font-weight: 700;
-  color: var(--green); text-shadow: 0 0 10px var(--green-glow);
-  margin-bottom: 0.8rem; letter-spacing: 0.05em;
-}
-.config-help { font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-top: 0.4rem; font-style: italic; }
-
-/* Risk Monitor */
-.risk-monitor {
-  background: rgba(0,0,0,0.35); border: 1px solid rgba(255,90,0,0.15);
-  border-radius: 10px; padding: 1rem; margin-top: 1rem;
-}
-.risk-monitor h4 {
-  font-family: 'Orbitron', sans-serif; font-size: 0.7rem; color: var(--neon);
-  margin-bottom: 0.8rem; letter-spacing: 0.06em;
-}
-.risk-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.8rem; }
-.risk-metric {
-  text-align: center; padding: 0.7rem; background: rgba(255,255,255,0.03);
-  border-radius: 8px; border: 1px solid rgba(255,90,0,0.08);
-}
-.metric-label { font-size: 0.5rem; color: rgba(255,255,255,0.35); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 0.3rem; display: block; }
-.metric-value { font-family: 'Orbitron', sans-serif; font-size: 0.9rem; font-weight: 700; color: var(--green); text-shadow: 0 0 8px var(--green-glow); }
-
-/* Sliders */
-.slider-container { display: flex; align-items: center; gap: 0.8rem; margin: 0.5rem 0; }
-.slider-value {
-  min-width: 40px; text-align: center; font-family: 'Orbitron', sans-serif;
-  font-weight: 700; color: var(--green); font-size: 0.75rem;
-}
-input[type="range"] {
-  flex: 1; height: 4px; background: rgba(255,90,0,0.2); border-radius: 2px; outline: none;
-  -webkit-appearance: none;
-}
-input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none; width: 14px; height: 14px; background: var(--green);
-  border-radius: 50%; cursor: pointer; box-shadow: 0 0 10px var(--green-glow);
-}
-
-/* Action Buttons */
-.action-buttons {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem; margin-top: 1.2rem;
-}
-.btn-action {
-  padding: 0.9rem; border: none; border-radius: 10px; color: #0a0a0a;
-  font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 0.65rem;
-  letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer;
-  transition: all 0.3s; box-shadow: 0 0 20px rgba(0,0,0,0.3);
-}
-.btn-action:hover:not(:disabled) { transform: translateY(-2px); }
-.btn-action:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-action.blue { background: linear-gradient(135deg, #4488ff, var(--blue)); box-shadow: 0 0 20px var(--blue-glow); }
-.btn-action.blue:hover:not(:disabled) { box-shadow: 0 0 35px var(--blue-glow); }
-.btn-action.orange { background: linear-gradient(135deg, var(--neon-bright), var(--neon)); box-shadow: 0 0 20px var(--neon-glow); }
-.btn-action.orange:hover:not(:disabled) { box-shadow: 0 0 35px var(--neon-glow); }
-.btn-action.red { background: linear-gradient(135deg, #ff6666, var(--red)); box-shadow: 0 0 20px var(--red-glow); }
-.btn-action.red:hover:not(:disabled) { box-shadow: 0 0 35px var(--red-glow); }
-
-/* Server Bot Status */
-.server-status {
-  background: rgba(0,0,0,0.4); border: 1px solid rgba(61,220,132,0.3);
-  border-radius: 12px; padding: 1rem; margin-top: 1rem;
-  box-shadow: 0 0 25px rgba(61,220,132,0.1);
-}
-.server-status-header { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; }
-.server-status-dot {
-  width: 8px; height: 8px; background: var(--green); border-radius: 50%;
-  box-shadow: 0 0 10px var(--green-glow); animation: pulse-dot 2s ease-in-out infinite;
-}
-.server-status-title { font-family: 'Orbitron', sans-serif; font-size: 0.7rem; font-weight: 700; color: var(--green); letter-spacing: 0.05em; }
-.server-status-info { font-size: 0.6rem; color: rgba(255,255,255,0.5); line-height: 1.5; }
-.server-status-info span { color: var(--green); }
-
-/* Accounts Section */
-.accounts-section { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-.account-card {
-  background: linear-gradient(155deg, rgba(255,255,255,0.06), rgba(12,12,18,0.4) 50%, rgba(5,5,10,0.45));
-  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255,170,100,0.22); border-radius: 14px;
-  padding: 1.2rem; box-shadow: 0 20px 40px rgba(0,0,0,0.4);
-  transition: all 0.3s; position: relative;
-}
-.account-card:hover { border-color: rgba(255,90,0,0.4); box-shadow: 0 20px 40px rgba(0,0,0,0.4), 0 0 25px rgba(255,90,0,0.12); }
-.account-card::before {
-  content: ''; position: absolute; top: 0; left: 15%; right: 15%; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,180,120,0.6), transparent);
-}
-.account-header { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.8rem; padding-bottom: 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.06); }
-.account-icon { font-size: 1.5rem; }
-.account-title { font-family: 'Orbitron', sans-serif; font-size: 0.8rem; font-weight: 700; color: var(--neon); letter-spacing: 0.05em; }
-.account-balance {
-  font-family: 'Orbitron', sans-serif; font-size: 1.8rem; font-weight: 700;
-  color: var(--neon); text-shadow: 0 0 15px var(--neon-glow); margin: 0.8rem 0;
-}
-.account-id { font-size: 0.6rem; color: rgba(255,255,255,0.35); }
-.account-id span { color: rgba(255,255,255,0.6); }
-
-/* History Section */
-.history-section {
-  background: linear-gradient(155deg, rgba(255,255,255,0.06), rgba(12,12,18,0.4) 50%, rgba(5,5,10,0.45));
-  backdrop-filter: blur(28px) saturate(1.6); -webkit-backdrop-filter: blur(28px) saturate(1.6);
-  border: 1px solid rgba(255,170,100,0.22); border-radius: 18px;
-  padding: 1.5rem; box-shadow: 0 28px 60px rgba(0,0,0,0.5), 0 0 40px rgba(255,90,0,0.08);
-  position: relative;
-}
-.history-section::after {
-  content: ''; position: absolute; top: 0; left: 12%; right: 12%; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,180,120,0.85), var(--neon), transparent);
-  box-shadow: 0 0 12px var(--neon-glow);
-}
-.history-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.2rem; flex-wrap: wrap; gap: 0.8rem; }
-.btn-clear {
-  padding: 0.5rem 1rem; background: rgba(255,61,61,0.15); border: 1px solid rgba(255,61,61,0.3);
-  border-radius: 8px; color: var(--red); font-family: 'Orbitron', sans-serif;
-  font-size: 0.55rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
-  cursor: pointer; transition: all 0.3s;
-}
-.btn-clear:hover { background: rgba(255,61,61,0.25); border-color: var(--red); box-shadow: 0 0 15px var(--red-glow); }
-
-.trade-list { max-height: 400px; overflow-y: auto; }
-.trade-list::-webkit-scrollbar { width: 6px; }
-.trade-list::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); border-radius: 3px; }
-.trade-list::-webkit-scrollbar-thumb { background: var(--neon); border-radius: 3px; }
-.trade-item {
-  background: rgba(0,0,0,0.35); border: 1px solid rgba(255,90,0,0.12);
-  border-radius: 10px; padding: 1rem; margin-bottom: 0.8rem; transition: all 0.3s;
-}
-.trade-item:hover { border-color: rgba(255,90,0,0.3); box-shadow: 0 0 15px rgba(255,90,0,0.1); }
-.trade-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
-.trade-type {
-  padding: 0.25rem 0.7rem; border-radius: 6px; font-size: 0.6rem; font-weight: 700;
-  font-family: 'Orbitron', sans-serif; letter-spacing: 0.05em;
-}
-.trade-type.call { background: rgba(61,220,132,0.15); color: var(--green); box-shadow: 0 0 10px rgba(61,220,132,0.2); }
-.trade-type.put { background: rgba(255,61,61,0.15); color: var(--red); box-shadow: 0 0 10px rgba(255,61,61,0.2); }
-.trade-type.skip { background: rgba(255,165,0,0.15); color: #ffa500; }
-.trade-time { font-size: 0.6rem; color: rgba(255,255,255,0.4); }
-.trade-info { font-size: 0.65rem; color: rgba(255,255,255,0.5); margin: 0.3rem 0; }
-.trade-id { font-size: 0.55rem; color: rgba(255,255,255,0.25); }
-.trade-details { display: flex; justify-content: space-between; align-items: center; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid rgba(255,255,255,0.06); }
-.trade-result { font-family: 'Orbitron', sans-serif; font-size: 0.8rem; font-weight: 700; }
-.trade-result.win { color: var(--green); text-shadow: 0 0 10px var(--green-glow); }
-.trade-result.loss { color: var(--red); text-shadow: 0 0 10px var(--red-glow); }
-.trade-result.pending { color: #ffa500; }
-.empty-history { text-align: center; padding: 2rem; color: rgba(255,255,255,0.3); font-size: 0.7rem; }
-
-@media (max-width: 768px) {
-  .control-grid { grid-template-columns: 1fr; }
-  .stats-grid { grid-template-columns: repeat(2, 1fr); }
-  .risk-metrics { grid-template-columns: repeat(2, 1fr); }
-  .action-buttons { grid-template-columns: 1fr; }
-}
-</style>
+ -> <meta charset="UTF-8" />
+ -> <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+ -> <title>SYNAPSE_CORE · Trading Bot Dashboard</title>
+ -> <link rel="preconnect" href="https://fonts.googleapis.com" />
+ -> <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+ -> <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+ -> <style>
+ ->  -> :root {
+ ->  ->   --neon: #ff5a00;
+ ->  ->   --neon-bright: #ff8a2b;
+ ->  ->   --neon-dim: #c43d00;
+ ->  ->   --neon-glow: rgba(255, 90, 0, 0.7);
+ ->  ->   --green: #3ddc84;
+ ->  ->   --green-glow: rgba(61, 220, 132, 0.5);
+ ->  ->   --red: #ff3d3d;
+ ->  ->   --red-glow: rgba(255, 61, 61, 0.5);
+ ->  ->   --blue: #0066ff;
+ ->  ->   --blue-glow: rgba(0, 102, 255, 0.5);
+ ->  ->   --bg: #030303;
+ ->  -> }
+ ->  -> * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+ ->  -> html { scroll-behavior: smooth; background: var(--bg); }
+ ->  -> body {
+ ->  ->   font-family: 'Share Tech Mono', monospace;
+ ->  ->   color: #e8e8e8;
+ ->  ->   background: var(--bg);
+ ->  ->   overflow-x: hidden;
+ ->  ->   overscroll-behavior-x: none;
+ ->  ->   touch-action: pan-y;
+ ->  ->   line-height: 1.5;
+ ->  -> }
+ ->  -> 
+ ->  -> /* ===== FIXED VIDEO LAYER ===== */
+ ->  -> .video-stage {
+ ->  ->   position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
+ ->  -> }
+ ->  -> .bg-video {
+ ->  ->   width: 100%; height: 100%; object-fit: cover; object-position: center 15%;
+ ->  ->   filter: contrast(1.1) brightness(0.85) saturate(1.1);
+ ->  ->   transform: scale(1.08); will-change: transform, filter, opacity;
+ ->  -> }
+ ->  -> .video-vignette {
+ ->  ->   position: absolute; inset: 0;
+ ->  ->   background: radial-gradient(ellipse 85% 70% at 50% 30%, transparent 20%, rgba(0,0,0,0.55) 100%),
+ ->  ->               linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, transparent 30%, transparent 50%, rgba(3,3,3,0.95) 100%);
+ ->  ->   transition: opacity 0.4s;
+ ->  -> }
+ ->  -> .video-scan {
+ ->  ->   position: absolute; inset: 0;
+ ->  ->   background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.08) 2px, rgba(0,0,0,0.08) 4px);
+ ->  ->   opacity: 0.2; pointer-events: none;
+ ->  -> }
+ ->  -> #fx { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
+ ->  -> 
+ ->  -> /* Progress bar */
+ ->  -> .scroll-progress {
+ ->  ->   position: fixed; top: 0; left: 0; height: 2px; z-index: 100;
+ ->  ->   background: linear-gradient(90deg, var(--neon), var(--neon-bright));
+ ->  ->   width: 0%; box-shadow: 0 0 12px var(--neon-glow); transition: width 0.05s linear;
+ ->  -> }
+ ->  -> .chapter-nav {
+ ->  ->   position: fixed; right: 0.8rem; top: 50%; transform: translateY(-50%); z-index: 90;
+ ->  ->   display: flex; flex-direction: column; gap: 0.7rem;
+ ->  -> }
+ ->  -> .chapter-nav button {
+ ->  ->   width: 8px; height: 8px; border-radius: 50%; border: 1px solid rgba(255,90,0,0.4);
+ ->  ->   background: transparent; cursor: pointer; padding: 0; transition: all 0.35s;
+ ->  -> }
+ ->  -> .chapter-nav button.active {
+ ->  ->   background: var(--neon); box-shadow: 0 0 12px var(--neon-glow); transform: scale(1.35);
+ ->  -> }
+ ->  -> 
+ ->  -> /* ===== LANDING STYLES ===== */
+ ->  -> .story { position: relative; z-index: 10; }
+ ->  -> .chapter {
+ ->  ->   min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column;
+ ->  ->   justify-content: center; align-items: center; padding: 2rem 1.2rem;
+ ->  ->   position: relative; perspective: 1000px;
+ ->  -> }
+ ->  -> .chapter-hero { justify-content: flex-end; padding-bottom: 2.5rem; }
+ ->  -> .top-bar {
+ ->  ->   position: absolute; top: 0; left: 0; right: 0; display: flex;
+ ->  ->   justify-content: space-between; align-items: center; padding: 1rem 1.25rem; z-index: 20;
+ ->  -> }
+ ->  -> .logo-mark {
+ ->  ->   font-family: 'Orbitron', sans-serif; font-size: 0.7rem; letter-spacing: 0.18em;
+ ->  ->   color: var(--neon); text-shadow: 0 0 14px var(--neon-glow);
+ ->  ->   display: flex; align-items: center; gap: 0.4rem;
+ ->  -> }
+ ->  -> .logo-mark .dot {
+ ->  ->   width: 7px; height: 7px; border-radius: 50%; background: var(--neon);
+ ->  ->   box-shadow: 0 0 10px var(--neon-glow); animation: pulse-dot 2s ease-in-out infinite;
+ ->  -> }
+ ->  -> @keyframes pulse-dot { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+ ->  -> 
+ ->  -> .panel {
+ ->  ->   width: 100%; max-width: 400px;
+ ->  ->   background: linear-gradient(155deg, rgba(255,255,255,0.08), rgba(12,12,18,0.42) 50%, rgba(5,5,10,0.5));
+ ->  ->   backdrop-filter: blur(28px) saturate(1.6); -webkit-backdrop-filter: blur(28px) saturate(1.6);
+ ->  ->   border: 1px solid rgba(255,170,100,0.22); border-radius: 18px;
+ ->  ->   padding: 1.35rem 1.15rem 1.15rem;
+ ->  ->   box-shadow: 0 28px 60px rgba(0,0,0,0.5), 0 0 40px rgba(255,90,0,0.08), inset 0 1px 1px rgba(255,255,255,0.12);
+ ->  ->   opacity: 0; transform: translate3d(0,0,0) scale(0.94);
+ ->  ->   transition: opacity 1s cubic-bezier(0.16,1,0.3,1), transform 1s cubic-bezier(0.16,1,0.3,1);
+ ->  ->   transform-style: preserve-3d;
+ ->  ->   touch-action: manipulation;
+ ->  ->   will-change: transform, opacity;
+ ->  -> }
+ ->  -> .chapter-hero.in-view .panel { opacity: 1; transform: translate3d(0,0,0) scale(1); }
+ ->  -> .panel::after {
+ ->  ->   content: ''; position: absolute; top: 0; left: 12%; right: 12%; height: 1px;
+ ->  ->   background: linear-gradient(90deg, transparent, rgba(255,180,120,0.85), var(--neon), transparent);
+ ->  ->   box-shadow: 0 0 12px var(--neon-glow);
+ ->  -> }
+ ->  -> .brand {
+ ->  ->   font-family: 'Orbitron', sans-serif; font-size: 0.52rem; letter-spacing: 0.26em;
+ ->  ->   color: var(--neon); margin-bottom: 0.35rem; text-shadow: 0 0 12px var(--neon-glow);
+ ->  -> }
+ ->  -> .headline {
+ ->  ->   font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 1.32rem;
+ ->  ->   line-height: 1.15; margin-bottom: 0.45rem; color: #fff;
+ ->  -> }
+ ->  -> .headline .accent { color: var(--neon); text-shadow: 0 0 14px var(--neon-glow); }
+ ->  -> .tagline { font-size: 0.58rem; letter-spacing: 0.05em; color: rgba(255,255,255,0.48); margin-bottom: 0.9rem; text-transform: uppercase; }
+ ->  -> .status-line {
+ ->  ->   display: flex; gap: 0.4rem; align-items: flex-start; font-size: 0.56rem;
+ ->  ->   color: rgba(255,255,255,0.45); margin-bottom: 1rem;
+ ->  -> }
+ ->  -> .status-line .bar {
+ ->  ->   width: 3px; height: 1.5em; background: var(--neon); border-radius: 2px;
+ ->  ->   box-shadow: 0 0 8px var(--neon-glow); animation: bar-life 1.5s ease-in-out infinite;
+ ->  -> }
+ ->  -> @keyframes bar-life { 0%,100%{opacity:1} 40%{opacity:0.25} }
+ ->  -> 
+ ->  -> .field { margin-bottom: 0.75rem; }
+ ->  -> .field label { display: block; font-size: 0.5rem; letter-spacing: 0.16em; color: rgba(255,255,255,0.38); margin-bottom: 0.25rem; text-transform: uppercase; }
+ ->  -> .input-wrap input {
+ ->  ->   width: 100%; background: rgba(0,0,0,0.45); border: 1px solid rgba(255,150,90,0.18);
+ ->  ->   border-radius: 10px; padding: 0.7rem 0.85rem; color: #fff;
+ ->  ->   font-family: inherit; font-size: 0.82rem; outline: none;
+ ->  ->   transition: border-color 0.3s, box-shadow 0.3s;
+ ->  -> }
+ ->  -> .input-wrap input:focus {
+ ->  ->   border-color: var(--neon); box-shadow: 0 0 0 1px var(--neon), 0 0 20px rgba(255,90,0,0.25);
+ ->  -> }
+ ->  -> .input-wrap { position: relative; }
+ ->  -> .input-wrap .eye {
+ ->  ->   position: absolute; right: 0.65rem; top: 50%; transform: translateY(-50%);
+ ->  ->   color: rgba(255,255,255,0.35); cursor: pointer; font-size: 0.85rem;
+ ->  -> }
+ ->  -> .btn-core {
+ ->  ->   width: 100%; margin-top: 0.3rem; padding: 0.82rem;
+ ->  ->   background: linear-gradient(135deg, var(--neon-bright), var(--neon) 50%, var(--neon-dim));
+ ->  ->   border: none; border-radius: 10px; color: #0a0a0a;
+ ->  ->   font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 0.7rem;
+ ->  ->   letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer;
+ ->  ->   box-shadow: 0 0 20px rgba(255,90,0,0.4); transition: transform 0.25s, box-shadow 0.25s;
+ ->  -> }
+ ->  -> .btn-core:hover { transform: translateY(-2px); box-shadow: 0 0 36px rgba(255,90,0,0.65); }
+ ->  -> .btn-core:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+ ->  -> 
+ ->  -> .panel-footer {
+ ->  ->   display: flex; justify-content: space-between; align-items: center;
+ ->  ->   margin-top: 0.9rem; padding-top: 0.7rem; border-top: 1px solid rgba(255,255,255,0.06); font-size: 0.48rem;
+ ->  -> }
+ ->  -> .enc { color: var(--green); letter-spacing: 0.06em; }
+ ->  -> .force-logout { color: rgba(255,255,255,0.28); max-width: 55%; text-align: right; cursor: pointer; transition: color 0.3s; }
+ ->  -> .force-logout:hover { color: var(--neon); }
+ ->  -> 
+ ->  -> /* Story chapters */
+ ->  -> .story-block {
+ ->  ->   max-width: 420px; width: 100%; text-align: center; opacity: 0;
+ ->  ->   transition: opacity 0.95s cubic-bezier(0.16,1,0.3,1), transform 0.95s cubic-bezier(0.16,1,0.3,1);
+ ->  ->   transform-style: preserve-3d; perspective: 800px;
+ ->  -> }
+ ->  -> .chapter:nth-child(even) .story-block { transform: translate3d(-30px,0,0) scale(0.96); }
+ ->  -> .chapter:nth-child(odd) .story-block { transform: translate3d(30px,0,0) scale(0.96); }
+ ->  -> .chapter.in-view .story-block { opacity: 1; transform: translate3d(0,0,0) scale(1); }
+ ->  -> 
+ ->  -> .chapter-label {
+ ->  ->   font-family: 'Orbitron', sans-serif; font-size: 0.5rem; letter-spacing: 0.28em;
+ ->  ->   color: var(--neon); margin-bottom: 0.8rem; text-transform: uppercase; text-shadow: 0 0 12px var(--neon-glow);
+ ->  -> }
+ ->  -> .story-title {
+ ->  ->   font-family: 'Orbitron', sans-serif; font-size: clamp(1.4rem, 5vw, 2rem);
+ ->  ->   font-weight: 700; line-height: 1.2; margin-bottom: 1rem; color: #fff;
+ ->  -> }
+ ->  -> .story-title .hl { color: var(--neon); text-shadow: 0 0 20px var(--neon-glow); }
+ ->  -> .story-text { font-size: 0.8rem; color: rgba(255,255,255,0.55); line-height: 1.7; margin-bottom: 1.5rem; }
+ ->  -> .story-glass {
+ ->  ->   background: rgba(0,0,0,0.35); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+ ->  ->   border: 1px solid rgba(255,90,0,0.15); border-radius: 16px;
+ ->  ->   padding: 1.5rem 1.3rem; box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+ ->  -> }
+ ->  -> 
+ ->  -> .stats-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; margin-top: 0.5rem; }
+ ->  -> @media (min-width: 500px) { .stats-row { grid-template-columns: repeat(4, 1fr); } }
+ ->  -> .stat-pill {
+ ->  ->   background: rgba(255,90,0,0.06); border: 1px solid rgba(255,90,0,0.18);
+ ->  ->   border-radius: 12px; padding: 0.9rem 0.5rem; text-align: center; opacity: 0;
+ ->  ->   transition: all 0.7s cubic-bezier(0.16,1,0.3,1); transform-style: preserve-3d;
+ ->  -> }
+ ->  -> .stat-pill:nth-child(odd) { transform: translate3d(-20px,0,0) scale(0.95); }
+ ->  -> .stat-pill:nth-child(even) { transform: translate3d(20px,0,0) scale(0.95); }
+ ->  -> .chapter.in-view .stat-pill { opacity: 1; transform: translate3d(0,0,0) scale(1); }
+ ->  -> .chapter.in-view .stat-pill:nth-child(1) { transition-delay: 0.1s; }
+ ->  -> .chapter.in-view .stat-pill:nth-child(2) { transition-delay: 0.2s; }
+ ->  -> .chapter.in-view .stat-pill:nth-child(3) { transition-delay: 0.3s; }
+ ->  -> .chapter.in-view .stat-pill:nth-child(4) { transition-delay: 0.4s; }
+ ->  -> .stat-pill .v { font-family: 'Orbitron', sans-serif; font-size: 1.15rem; font-weight: 700; color: var(--neon); text-shadow: 0 0 14px var(--neon-glow); display: block; }
+ ->  -> .stat-pill .l { font-size: 0.45rem; letter-spacing: 0.1em; color: rgba(255,255,255,0.4); text-transform: uppercase; margin-top: 0.25rem; }
+ ->  -> 
+ ->  -> .steps { display: flex; flex-direction: column; gap: 0.9rem; text-align: left; }
+ ->  -> .step {
+ ->  ->   display: flex; gap: 0.9rem; align-items: flex-start; opacity: 0;
+ ->  ->   transition: all 0.75s cubic-bezier(0.16,1,0.3,1); transform-style: preserve-3d;
+ ->  -> }
+ ->  -> .step:nth-child(odd) { transform: translate3d(-25px,0,0); }
+ ->  -> .step:nth-child(even) { transform: translate3d(25px,0,0); }
+ ->  -> .chapter.in-view .step { opacity: 1; transform: translate3d(0,0,0); }
+ ->  -> .chapter.in-view .step:nth-child(1) { transition-delay: 0.15s; }
+ ->  -> .chapter.in-view .step:nth-child(2) { transition-delay: 0.3s; }
+ ->  -> .chapter.in-view .step:nth-child(3) { transition-delay: 0.45s; }
+ ->  -> .chapter.in-view .step:nth-child(4) { transition-delay: 0.6s; }
+ ->  -> .step-num { font-family: 'Orbitron', sans-serif; font-size: 0.9rem; color: var(--neon); text-shadow: 0 0 10px var(--neon-glow); min-width: 1.6rem; }
+ ->  -> .step h4 { font-family: 'Orbitron', sans-serif; font-size: 0.68rem; letter-spacing: 0.06em; margin-bottom: 0.2rem; }
+ ->  -> .step p { font-size: 0.65rem; color: rgba(255,255,255,0.45); line-height: 1.5; }
+ ->  -> 
+ ->  -> .live-box { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,90,0,0.18); border-radius: 14px; padding: 1rem; margin-top: 1rem; }
+ ->  -> .live-head { display: flex; justify-content: space-between; font-size: 0.55rem; letter-spacing: 0.1em; margin-bottom: 0.7rem; }
+ ->  -> .live-head .pair { color: var(--neon); font-family: 'Orbitron', sans-serif; }
+ ->  -> .live-head .badge { color: var(--green); display: flex; align-items: center; gap: 0.3rem; }
+ ->  -> .live-head .badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse-dot 1.4s ease-in-out infinite; }
+ ->  -> #miniChart { width: 100%; height: 110px; display: block; }
+ ->  -> .live-metrics { display: grid; grid-template-columns: repeat(3,1fr); gap: 0.5rem; margin-top: 0.7rem; }
+ ->  -> .metric { text-align: center; padding: 0.45rem; background: rgba(255,255,255,0.03); border-radius: 8px; }
+ ->  -> .metric .mv { font-family: 'Orbitron', sans-serif; font-size: 0.8rem; color: var(--neon); }
+ ->  -> .metric .ml { font-size: 0.45rem; color: rgba(255,255,255,0.35); letter-spacing: 0.08em; text-transform: uppercase; }
+ ->  -> 
+ ->  -> .cta-btn {
+ ->  ->   display: inline-block; margin-top: 0.5rem; padding: 0.9rem 1.8rem;
+ ->  ->   background: linear-gradient(135deg, var(--neon-bright), var(--neon)); border: none; border-radius: 12px;
+ ->  ->   color: #0a0a0a; font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 0.72rem;
+ ->  ->   letter-spacing: 0.12em; text-transform: uppercase; text-decoration: none;
+ ->  ->   box-shadow: 0 0 28px rgba(255,90,0,0.45); transition: transform 0.25s, box-shadow 0.25s;
+ ->  -> }
+ ->  -> .cta-btn:hover { transform: translateY(-3px); box-shadow: 0 0 44px rgba(255,90,0,0.7); }
+ ->  -> 
+ ->  -> .site-footer {
+ ->  ->   position: relative; z-index: 10; background: rgba(4,4,4,0.92);
+ ->  ->   border-top: 1px solid rgba(255,90,0,0.12); padding: 2.8rem 1.25rem 2rem;
+ ->  ->   backdrop-filter: blur(20px);
+ ->  -> }
+ ->  -> .footer-inner { max-width: 920px; margin: 0 auto; display: grid; grid-template-columns: 1fr; gap: 1.8rem; }
+ ->  -> @media (min-width: 700px) { .footer-inner { grid-template-columns: 1.4fr 1fr 1fr 1.15fr; } }
+ ->  -> .footer-brand .logo { font-family: 'Orbitron', sans-serif; font-size: 0.8rem; letter-spacing: 0.12em; color: var(--neon); margin-bottom: 0.6rem; text-shadow: 0 0 12px var(--neon-glow); }
+ ->  -> .footer-brand p { font-size: 0.65rem; color: rgba(255,255,255,0.4); line-height: 1.55; margin-bottom: 0.9rem; max-width: 240px; }
+ ->  -> .socials { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+ ->  -> .socials a {
+ ->  ->   width: 32px; height: 32px; border-radius: 50%; border: 1px solid rgba(255,90,0,0.25);
+ ->  ->   display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.5);
+ ->  ->   text-decoration: none; font-size: 0.8rem; transition: all 0.3s; background: rgba(255,255,255,0.02);
+ ->  -> }
+ ->  -> .socials a:hover { color: var(--neon); border-color: var(--neon); box-shadow: 0 0 12px var(--neon-glow); }
+ ->  -> .footer-col h4 { font-family: 'Orbitron', sans-serif; font-size: 0.55rem; letter-spacing: 0.16em; color: var(--neon); margin-bottom: 0.8rem; text-transform: uppercase; }
+ ->  -> .footer-col ul { list-style: none; }
+ ->  -> .footer-col li { margin-bottom: 0.4rem; }
+ ->  -> .footer-col a { font-size: 0.65rem; color: rgba(255,255,255,0.4); text-decoration: none; transition: color 0.25s; }
+ ->  -> .footer-col a:hover { color: var(--neon); }
+ ->  -> .status-box { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,90,0,0.15); border-radius: 12px; padding: 0.95rem 1rem; }
+ ->  -> .status-box .s-label { font-size: 0.48rem; letter-spacing: 0.12em; color: rgba(255,255,255,0.35); text-transform: uppercase; margin-bottom: 0.3rem; }
+ ->  -> .status-box .s-name { font-family: 'Orbitron', sans-serif; font-size: 0.6rem; letter-spacing: 0.08em; color: rgba(255,255,255,0.45); margin-bottom: 0.35rem; }
+ ->  -> .status-box .s-online { font-family: 'Orbitron', sans-serif; font-size: 1.1rem; font-weight: 700; color: var(--green); text-shadow: 0 0 16px rgba(61,220,132,0.5); letter-spacing: 0.06em; }
+ ->  -> .status-box .s-sub { font-size: 0.5rem; color: rgba(255,255,255,0.28); margin-top: 0.35rem; }
+ ->  -> .footer-bottom {
+ ->  ->   max-width: 920px; margin: 2rem auto 0; padding-top: 1.2rem;
+ ->  ->   border-top: 1px solid rgba(255,255,255,0.05); text-align: center;
+ ->  ->   font-size: 0.52rem; color: rgba(255,255,255,0.22); letter-spacing: 0.08em;
+ ->  -> }
+ ->  -> .sound-btn {
+ ->  ->   position: fixed; bottom: 1rem; left: 1rem; z-index: 95; background: rgba(0,0,0,0.55);
+ ->  ->   border: 1px solid rgba(255,90,0,0.35); color: var(--neon);
+ ->  ->   font-family: 'Orbitron', sans-serif; font-size: 0.5rem; letter-spacing: 0.1em;
+ ->  ->   padding: 0.4rem 0.7rem; border-radius: 16px; backdrop-filter: blur(10px);
+ ->  ->   cursor: pointer; text-transform: uppercase;
+ ->  -> }
+ ->  -> .sound-btn.active { color: var(--green); border-color: rgba(61,220,132,0.45); }
+ ->  -> .scroll-hint {
+ ->  ->   position: absolute; bottom: 1.2rem; left: 50%; transform: translateX(-50%);
+ ->  ->   font-size: 0.5rem; letter-spacing: 0.2em; color: rgba(255,255,255,0.35);
+ ->  ->   text-transform: uppercase; animation: hint-bob 2s ease-in-out infinite; pointer-events: none;
+ ->  -> }
+ ->  -> @keyframes hint-bob { 0%,100% { transform: translateX(-50%) translateY(0); opacity: 0.35; } 50% { transform: translateX(-50%) translateY(6px); opacity: 0.7; } }
+ ->  -> 
+ ->  -> /* ==================== DASHBOARD FUTURISTA ==================== */
+ ->  -> .hidden { display: none !important; }
+ ->  -> 
+ ->  -> .landing-hidden .story,
+ ->  -> .landing-hidden .chapter-nav,
+ ->  -> .landing-hidden .scroll-progress,
+ ->  -> .landing-hidden .site-footer,
+ ->  -> .landing-hidden .scroll-hint {
+ ->  ->   display: none !important;
+ ->  -> }
+ ->  -> 
+ ->  -> /* Dashboard container */
+ ->  -> .dashboard {
+ ->  ->   animation: fadeInDash 0.8s cubic-bezier(0.16,1,0.3,1);
+ ->  ->   min-height: 100vh;
+ ->  ->   position: relative;
+ ->  ->   z-index: 20;
+ ->  ->   padding: 2rem 1.2rem;
+ ->  ->   padding-bottom: 4rem;
+ ->  -> }
+ ->  -> @keyframes fadeInDash {
+ ->  ->   from { opacity: 0; transform: translateY(30px); }
+ ->  ->   to { opacity: 1; transform: translateY(0); }
+ ->  -> }
+ ->  -> 
+ ->  -> .dash-container { max-width: 1200px; margin: 0 auto; }
+ ->  -> 
+ ->  -> /* Top Bar Dashboard */
+ ->  -> .top-bar-dash {
+ ->  ->   background: linear-gradient(155deg, rgba(255,255,255,0.08), rgba(12,12,18,0.42) 50%, rgba(5,5,10,0.5));
+ ->  ->   backdrop-filter: blur(28px) saturate(1.6); -webkit-backdrop-filter: blur(28px) saturate(1.6);
+ ->  ->   border: 1px solid rgba(255,170,100,0.22); border-radius: 18px;
+ ->  ->   padding: 1.2rem 1.5rem; margin-bottom: 1.5rem;
+ ->  ->   box-shadow: 0 28px 60px rgba(0,0,0,0.5), 0 0 40px rgba(255,90,0,0.08);
+ ->  ->   display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;
+ ->  ->   position: relative;
+ ->  -> }
+ ->  -> .top-bar-dash::after {
+ ->  ->   content: ''; position: absolute; top: 0; left: 12%; right: 12%; height: 1px;
+ ->  ->   background: linear-gradient(90deg, transparent, rgba(255,180,120,0.85), var(--neon), transparent);
+ ->  ->   box-shadow: 0 0 12px var(--neon-glow);
+ ->  -> }
+ ->  -> .user-info { display: flex; align-items: center; gap: 1rem; }
+ ->  -> .status-dot {
+ ->  ->   width: 10px; height: 10px; background: var(--green); border-radius: 50%;
+ ->  ->   box-shadow: 0 0 10px var(--green-glow); animation: pulse-dot 2s ease-in-out infinite;
+ ->  -> }
+ ->  -> .user-name {
+ ->  ->   font-family: 'Orbitron', sans-serif; font-size: 1rem; font-weight: 700; color: #fff;
+ ->  ->   letter-spacing: 0.05em;
+ ->  -> }
+ ->  -> .user-status { font-size: 0.6rem; color: var(--green); letter-spacing: 0.08em; }
+ ->  -> .dash-actions { display: flex; gap: 0.8rem; flex-wrap: wrap; }
+ ->  -> .btn-dash {
+ ->  ->   padding: 0.5rem 1rem; background: rgba(255,90,0,0.1); border: 1px solid rgba(255,90,0,0.3);
+ ->  ->   border-radius: 8px; color: var(--neon); font-family: 'Orbitron', sans-serif;
+ ->  ->   font-size: 0.6rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+ ->  ->   cursor: pointer; transition: all 0.3s; backdrop-filter: blur(10px);
+ ->  -> }
+ ->  -> .btn-dash:hover {
+ ->  ->   background: rgba(255,90,0,0.2); border-color: var(--neon);
+ ->  ->   box-shadow: 0 0 20px rgba(255,90,0,0.3); transform: translateY(-2px);
+ ->  -> }
+ ->  -> .btn-dash.danger { border-color: rgba(255,61,61,0.3); color: var(--red); }
+ ->  -> .btn-dash.danger:hover { background: rgba(255,61,61,0.2); border-color: var(--red); box-shadow: 0 0 20px var(--red-glow); }
+ ->  -> 
+ ->  -> /* Stats Grid */
+ ->  -> .stats-grid {
+ ->  ->   display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+ ->  ->   gap: 1rem; margin-bottom: 1.5rem;
+ ->  -> }
+ ->  -> .stat-card {
+ ->  ->   background: linear-gradient(155deg, rgba(255,255,255,0.06), rgba(12,12,18,0.4) 50%, rgba(5,5,10,0.45));
+ ->  ->   backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+ ->  ->   border: 1px solid rgba(255,170,100,0.18); border-radius: 14px;
+ ->  ->   padding: 1.2rem; text-align: center;
+ ->  ->   box-shadow: 0 20px 40px rgba(0,0,0,0.4), 0 0 20px rgba(255,90,0,0.05);
+ ->  ->   transition: all 0.3s; position: relative; overflow: hidden;
+ ->  -> }
+ ->  -> .stat-card:hover {
+ ->  ->   border-color: rgba(255,90,0,0.4); box-shadow: 0 20px 40px rgba(0,0,0,0.4), 0 0 30px rgba(255,90,0,0.15);
+ ->  ->   transform: translateY(-3px);
+ ->  -> }
+ ->  -> .stat-card::before {
+ ->  ->   content: ''; position: absolute; top: 0; left: 20%; right: 20%; height: 1px;
+ ->  ->   background: linear-gradient(90deg, transparent, rgba(255,180,120,0.6), transparent);
+ ->  -> }
+ ->  -> .stat-label {
+ ->  ->   font-size: 0.5rem; letter-spacing: 0.12em; color: rgba(255,255,255,0.4);
+ ->  ->   text-transform: uppercase; margin-bottom: 0.6rem;
+ ->  -> }
+ ->  -> .stat-value {
+ ->  ->   font-family: 'Orbitron', sans-serif; font-size: 1.4rem; font-weight: 700;
+ ->  ->   color: var(--neon); text-shadow: 0 0 14px var(--neon-glow);
+ ->  -> }
+ ->  -> .stat-value.positive { color: var(--green); text-shadow: 0 0 14px var(--green-glow); }
+ ->  -> .stat-value.negative { color: var(--red); text-shadow: 0 0 14px var(--red-glow); }
+ ->  -> 
+ ->  -> /* Control Panel */
+ ->  -> .control-panel {
+ ->  ->   background: linear-gradient(155deg, rgba(255,255,255,0.06), rgba(12,12,18,0.4) 50%, rgba(5,5,10,0.45));
+ ->  ->   backdrop-filter: blur(28px) saturate(1.6); -webkit-backdrop-filter: blur(28px) saturate(1.6);
+ ->  ->   border: 1px solid rgba(255,170,100,0.22); border-radius: 18px;
+ ->  ->   padding: 1.5rem; margin-bottom: 1.5rem;
+ ->  ->   box-shadow: 0 28px 60px rgba(0,0,0,0.5), 0 0 40px rgba(255,90,0,0.08);
+ ->  ->   position: relative;
+ ->  -> }
+ ->  -> .control-panel::after {
+ ->  ->   content: ''; position: absolute; top: 0; left: 12%; right: 12%; height: 1px;
+ ->  ->   background: linear-gradient(90deg, transparent, rgba(255,180,120,0.85), var(--neon), transparent);
+ ->  ->   box-shadow: 0 0 12px var(--neon-glow);
+ ->  -> }
+ ->  -> .panel-title {
+ ->  ->   font-family: 'Orbitron', sans-serif; font-size: 1.1rem; font-weight: 700;
+ ->  ->   color: var(--neon); text-shadow: 0 0 12px var(--neon-glow);
+ ->  ->   margin-bottom: 1.2rem; letter-spacing: 0.05em;
+ ->  -> }
+ ->  -> .control-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+ ->  -> .control-item {
+ ->  ->   background: rgba(0,0,0,0.35); border: 1px solid rgba(255,90,0,0.12);
+ ->  ->   border-radius: 10px; padding: 1rem;
+ ->  -> }
+ ->  -> .control-label {
+ ->  ->   font-size: 0.55rem; letter-spacing: 0.1em; color: rgba(255,255,255,0.4);
+ ->  ->   text-transform: uppercase; margin-bottom: 0.6rem; display: block;
+ ->  -> }
+ ->  -> .control-select, .control-input {
+ ->  ->   width: 100%; padding: 0.6rem 0.8rem; background: rgba(0,0,0,0.5);
+ ->  ->   border: 1px solid rgba(255,150,90,0.18); border-radius: 8px;
+ ->  ->   color: #fff; font-family: 'Share Tech Mono', monospace; font-size: 0.8rem;
+ ->  ->   outline: none; transition: all 0.3s;
+ ->  -> }
+ ->  -> .control-select:focus, .control-input:focus {
+ ->  ->   border-color: var(--neon); box-shadow: 0 0 0 1px var(--neon), 0 0 15px rgba(255,90,0,0.2);
+ ->  -> }
+ ->  -> 
+ ->  -> /* Risk Config Section */
+ ->  -> .risk-config-section {
+ ->  ->   background: rgba(0,0,0,0.4); border: 1px solid rgba(61,220,132,0.25);
+ ->  ->   border-radius: 14px; padding: 1.2rem; margin: 1.2rem 0;
+ ->  ->   box-shadow: 0 0 25px rgba(61,220,132,0.08);
+ ->  -> }
+ ->  -> .risk-config-section h3 {
+ ->  ->   font-family: 'Orbitron', sans-serif; font-size: 0.9rem; font-weight: 700;
+ ->  ->   color: var(--green); text-shadow: 0 0 10px var(--green-glow);
+ ->  ->   margin-bottom: 0.8rem; letter-spacing: 0.05em;
+ ->  -> }
+ ->  -> .config-help { font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-top: 0.4rem; font-style: italic; }
+ ->  -> 
+ ->  -> /* Risk Monitor */
+ ->  -> .risk-monitor {
+ ->  ->   background: rgba(0,0,0,0.35); border: 1px solid rgba(255,90,0,0.15);
+ ->  ->   border-radius: 10px; padding: 1rem; margin-top: 1rem;
+ ->  -> }
+ ->  -> .risk-monitor h4 {
+ ->  ->   font-family: 'Orbitron', sans-serif; font-size: 0.7rem; color: var(--neon);
+ ->  ->   margin-bottom: 0.8rem; letter-spacing: 0.06em;
+ ->  -> }
+ ->  -> .risk-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.8rem; }
+ ->  -> .risk-metric {
+ ->  ->   text-align: center; padding: 0.7rem; background: rgba(255,255,255,0.03);
+ ->  ->   border-radius: 8px; border: 1px solid rgba(255,90,0,0.08);
+ ->  -> }
+ ->  -> .metric-label { font-size: 0.5rem; color: rgba(255,255,255,0.35); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 0.3rem; display: block; }
+ ->  -> .metric-value { font-family: 'Orbitron', sans-serif; font-size: 0.9rem; font-weight: 700; color: var(--green); text-shadow: 0 0 8px var(--green-glow); }
+ ->  -> 
+ ->  -> /* Sliders */
+ ->  -> .slider-container { display: flex; align-items: center; gap: 0.8rem; margin: 0.5rem 0; }
+ ->  -> .slider-value {
+ ->  ->   min-width: 40px; text-align: center; font-family: 'Orbitron', sans-serif;
+ ->  ->   font-weight: 700; color: var(--green); font-size: 0.75rem;
+ ->  -> }
+ ->  -> input[type="range"] {
+ ->  ->   flex: 1; height: 4px; background: rgba(255,90,0,0.2); border-radius: 2px; outline: none;
+ ->  ->   -webkit-appearance: none;
+ ->  -> }
+ ->  -> input[type="range"]::-webkit-slider-thumb {
+ ->  ->   -webkit-appearance: none; width: 14px; height: 14px; background: var(--green);
+ ->  ->   border-radius: 50%; cursor: pointer; box-shadow: 0 0 10px var(--green-glow);
+ ->  -> }
+ ->  -> 
+ ->  -> /* Action Buttons */
+ ->  -> .action-buttons {
+ ->  ->   display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+ ->  ->   gap: 1rem; margin-top: 1.2rem;
+ ->  -> }
+ ->  -> .btn-action {
+ ->  ->   padding: 0.9rem; border: none; border-radius: 10px; color: #0a0a0a;
+ ->  ->   font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 0.65rem;
+ ->  ->   letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer;
+ ->  ->   transition: all 0.3s; box-shadow: 0 0 20px rgba(0,0,0,0.3);
+ ->  -> }
+ ->  -> .btn-action:hover:not(:disabled) { transform: translateY(-2px); }
+ ->  -> .btn-action:disabled { opacity: 0.5; cursor: not-allowed; }
+ ->  -> .btn-action.blue { background: linear-gradient(135deg, #4488ff, var(--blue)); box-shadow: 0 0 20px var(--blue-glow); }
+ ->  -> .btn-action.blue:hover:not(:disabled) { box-shadow: 0 0 35px var(--blue-glow); }
+ ->  -> .btn-action.orange { background: linear-gradient(135deg, var(--neon-bright), var(--neon)); box-shadow: 0 0 20px var(--neon-glow); }
+ ->  -> .btn-action.orange:hover:not(:disabled) { box-shadow: 0 0 35px var(--neon-glow); }
+ ->  -> .btn-action.red { background: linear-gradient(135deg, #ff6666, var(--red)); box-shadow: 0 0 20px var(--red-glow); }
+ ->  -> .btn-action.red:hover:not(:disabled) { box-shadow: 0 0 35px var(--red-glow); }
+ ->  -> 
+ ->  -> /* Server Bot Status */
+ ->  -> .server-status {
+ ->  ->   background: rgba(0,0,0,0.4); border: 1px solid rgba(61,220,132,0.3);
+ ->  ->   border-radius: 12px; padding: 1rem; margin-top: 1rem;
+ ->  ->   box-shadow: 0 0 25px rgba(61,220,132,0.1);
+ ->  -> }
+ ->  -> .server-status-header { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; }
+ ->  -> .server-status-dot {
+ ->  ->   width: 8px; height: 8px; background: var(--green); border-radius: 50%;
+ ->  ->   box-shadow: 0 0 10px var(--green-glow); animation: pulse-dot 2s ease-in-out infinite;
+ ->  -> }
+ ->  -> .server-status-title { font-family: 'Orbitron', sans-serif; font-size: 0.7rem; font-weight: 700; color: var(--green); letter-spacing: 0.05em; }
+ ->  -> .server-status-info { font-size: 0.6rem; color: rgba(255,255,255,0.5); line-height: 1.5; }
+ ->  -> .server-status-info span { color: var(--green); }
+ ->  -> 
+ ->  -> /* Accounts Section */
+ ->  -> .accounts-section { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+ ->  -> .account-card {
+ ->  ->   background: linear-gradient(155deg, rgba(255,255,255,0.06), rgba(12,12,18,0.4) 50%, rgba(5,5,10,0.45));
+ ->  ->   backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+ ->  ->   border: 1px solid rgba(255,170,100,0.22); border-radius: 14px;
+ ->  ->   padding: 1.2rem; box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+ ->  ->   transition: all 0.3s; position: relative;
+ ->  -> }
+ ->  -> .account-card:hover { border-color: rgba(255,90,0,0.4); box-shadow: 0 20px 40px rgba(0,0,0,0.4), 0 0 25px rgba(255,90,0,0.12); }
+ ->  -> .account-card::before {
+ ->  ->   content: ''; position: absolute; top: 0; left: 15%; right: 15%; height: 1px;
+ ->  ->   background: linear-gradient(90deg, transparent, rgba(255,180,120,0.6), transparent);
+ ->  -> }
+ ->  -> .account-header { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.8rem; padding-bottom: 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.06); }
+ ->  -> .account-icon { font-size: 1.5rem; }
+ ->  -> .account-title { font-family: 'Orbitron', sans-serif; font-size: 0.8rem; font-weight: 700; color: var(--neon); letter-spacing: 0.05em; }
+ ->  -> .account-balance {
+ ->  ->   font-family: 'Orbitron', sans-serif; font-size: 1.8rem; font-weight: 700;
+ ->  ->   color: var(--neon); text-shadow: 0 0 15px var(--neon-glow); margin: 0.8rem 0;
+ ->  -> }
+ ->  -> .account-id { font-size: 0.6rem; color: rgba(255,255,255,0.35); }
+ ->  -> .account-id span { color: rgba(255,255,255,0.6); }
+ ->  -> 
+ ->  -> /* History Section */
+ ->  -> .history-section {
+ ->  ->   background: linear-gradient(155deg, rgba(255,255,255,0.06), rgba(12,12,18,0.4) 50%, rgba(5,5,10,0.45));
+ ->  ->   backdrop-filter: blur(28px) saturate(1.6); -webkit-backdrop-filter: blur(28px) saturate(1.6);
+ ->  ->   border: 1px solid rgba(255,170,100,0.22); border-radius: 18px;
+ ->  ->   padding: 1.5rem; box-shadow: 0 28px 60px rgba(0,0,0,0.5), 0 0 40px rgba(255,90,0,0.08);
+ ->  ->   position: relative;
+ ->  -> }
+ ->  -> .history-section::after {
+ ->  ->   content: ''; position: absolute; top: 0; left: 12%; right: 12%; height: 1px;
+ ->  ->   background: linear-gradient(90deg, transparent, rgba(255,180,120,0.85), var(--neon), transparent);
+ ->  ->   box-shadow: 0 0 12px var(--neon-glow);
+ ->  -> }
+ ->  -> .history-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.2rem; flex-wrap: wrap; gap: 0.8rem; }
+ ->  -> .btn-clear {
+ ->  ->   padding: 0.5rem 1rem; background: rgba(255,61,61,0.15); border: 1px solid rgba(255,61,61,0.3);
+ ->  ->   border-radius: 8px; color: var(--red); font-family: 'Orbitron', sans-serif;
+ ->  ->   font-size: 0.55rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+ ->  ->   cursor: pointer; transition: all 0.3s;
+ ->  -> }
+ ->  -> .btn-clear:hover { background: rgba(255,61,61,0.25); border-color: var(--red); box-shadow: 0 0 15px var(--red-glow); }
+ ->  -> 
+ ->  -> .trade-list { max-height: 400px; overflow-y: auto; }
+ ->  -> .trade-list::-webkit-scrollbar { width: 6px; }
+ ->  -> .trade-list::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); border-radius: 3px; }
+ ->  -> .trade-list::-webkit-scrollbar-thumb { background: var(--neon); border-radius: 3px; }
+ ->  -> .trade-item {
+ ->  ->   background: rgba(0,0,0,0.35); border: 1px solid rgba(255,90,0,0.12);
+ ->  ->   border-radius: 10px; padding: 1rem; margin-bottom: 0.8rem; transition: all 0.3s;
+ ->  -> }
+ ->  -> .trade-item:hover { border-color: rgba(255,90,0,0.3); box-shadow: 0 0 15px rgba(255,90,0,0.1); }
+ ->  -> .trade-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+ ->  -> .trade-type {
+ ->  ->   padding: 0.25rem 0.7rem; border-radius: 6px; font-size: 0.6rem; font-weight: 700;
+ ->  ->   font-family: 'Orbitron', sans-serif; letter-spacing: 0.05em;
+ ->  -> }
+ ->  -> .trade-type.call { background: rgba(61,220,132,0.15); color: var(--green); box-shadow: 0 0 10px rgba(61,220,132,0.2); }
+ ->  -> .trade-type.put { background: rgba(255,61,61,0.15); color: var(--red); box-shadow: 0 0 10px rgba(255,61,61,0.2); }
+ ->  -> .trade-type.skip { background: rgba(255,165,0,0.15); color: #ffa500; }
+ ->  -> .trade-time { font-size: 0.6rem; color: rgba(255,255,255,0.4); }
+ ->  -> .trade-info { font-size: 0.65rem; color: rgba(255,255,255,0.5); margin: 0.3rem 0; }
+ ->  -> .trade-id { font-size: 0.55rem; color: rgba(255,255,255,0.25); }
+ ->  -> .trade-details { display: flex; justify-content: space-between; align-items: center; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid rgba(255,255,255,0.06); }
+ ->  -> .trade-result { font-family: 'Orbitron', sans-serif; font-size: 0.8rem; font-weight: 700; }
+ ->  -> .trade-result.win { color: var(--green); text-shadow: 0 0 10px var(--green-glow); }
+ ->  -> .trade-result.loss { color: var(--red); text-shadow: 0 0 10px var(--red-glow); }
+ ->  -> .trade-result.pending { color: #ffa500; }
+ ->  -> .empty-history { text-align: center; padding: 2rem; color: rgba(255,255,255,0.3); font-size: 0.7rem; }
+ ->  -> 
+ ->  -> @media (max-width: 768px) {
+ ->  ->   .control-grid { grid-template-columns: 1fr; }
+ ->  ->   .stats-grid { grid-template-columns: repeat(2, 1fr); }
+ ->  ->   .risk-metrics { grid-template-columns: repeat(2, 1fr); }
+ ->  ->   .action-buttons { grid-template-columns: 1fr; }
+ ->  -> }
+ ->  -> 
+ ->  -> /* Typewriter on scroll */
+ ->  -> .typewriter {
+ ->  ->   overflow: hidden;
+ ->  ->   white-space: pre-wrap;
+ ->  ->   border-right: 2px solid transparent;
+ ->  -> }
+ ->  -> .typewriter.typing {
+ ->  ->   border-right-color: var(--neon);
+ ->  ->   animation: caret-blink 0.7s step-end infinite;
+ ->  -> }
+ ->  -> @keyframes caret-blink {
+ ->  ->   50% { border-right-color: transparent; }
+ ->  -> }
+ ->  -> .typewriter-done { border-right-color: transparent !important; animation: none !important; }
+ ->  -> .extra-block {
+ ->  ->   margin-top: 1.1rem; padding-top: 1rem;
+ ->  ->   border-top: 1px solid rgba(255,90,0,0.12);
+ ->  ->   text-align: left;
+ ->  -> }
+ ->  -> .extra-block h4 {
+ ->  ->   font-family: 'Orbitron', sans-serif; font-size: 0.62rem;
+ ->  ->   letter-spacing: 0.1em; color: var(--neon); margin-bottom: 0.45rem;
+ ->  ->   text-shadow: 0 0 10px var(--neon-glow);
+ ->  -> }
+ ->  -> .extra-block p, .extra-block li {
+ ->  ->   font-size: 0.68rem; color: rgba(255,255,255,0.5); line-height: 1.55;
+ ->  -> }
+ ->  -> .extra-block ul { list-style: none; padding: 0; margin: 0.4rem 0 0; }
+ ->  -> .extra-block li { padding: 0.25rem 0 0.25rem 0.9rem; position: relative; }
+ ->  -> .extra-block li::before {
+ ->  ->   content: '▸'; position: absolute; left: 0; color: var(--neon); font-size: 0.55rem; top: 0.35rem;
+ ->  -> }
+ ->  -> .feature-grid {
+ ->  ->   display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; margin-top: 0.9rem;
+ ->  -> }
+ ->  -> .feature-chip {
+ ->  ->   background: rgba(255,90,0,0.06); border: 1px solid rgba(255,90,0,0.18);
+ ->  ->   border-radius: 10px; padding: 0.65rem 0.55rem; text-align: center;
+ ->  -> }
+ ->  -> .feature-chip .fc-v {
+ ->  ->   font-family: 'Orbitron', sans-serif; font-size: 0.75rem; color: var(--neon);
+ ->  ->   display: block; margin-bottom: 0.2rem;
+ ->  -> }
+ ->  -> .feature-chip .fc-l {
+ ->  ->   font-size: 0.45rem; letter-spacing: 0.08em; color: rgba(255,255,255,0.38);
+ ->  ->   text-transform: uppercase;
+ ->  -> }
+ ->  -> 
+ ->  -> 
+ -> </style>
+ -> <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
-<!-- ==================== LANDING PAGE ==================== -->
-<div id="landingPage">
-  <div class="scroll-progress" id="progress"></div>
-  <div class="video-stage" id="videoStage">
-    <video class="bg-video" id="bgVideo" autoplay muted loop playsinline>
-      <source src="https://litter.catbox.moe/dpfvdf.mp4" type="video/mp4" />
+ -> <!-- ==================== LANDING PAGE ==================== -->
+ -> <div id="landingPage">
+ ->  -> <div class="scroll-progress" id="progress"></div>
+ ->  -> <div class="video-stage" id="videoStage">
+ ->  ->  -> <video class="bg-video" id="bgVideo" autoplay muted loop playsinline>
+      <source src="https://drive.google.com/uc?export=download&id=1WY7wDEHy-1ZkKCqh2QhoCtn9iILM3vRI" type="video/mp4" />
     </video>
-    <div class="video-vignette" id="vignette"></div>
-    <div class="video-scan"></div>
-  </div>
-  <canvas id="fx"></canvas>
-  <nav class="chapter-nav" id="chapterNav" aria-label="Capítulos"></nav>
+ ->  ->  -> <div class="video-vignette" id="vignette"></div>
+ ->  ->  -> <div class="video-scan"></div>
+ ->  -> </div>
+ ->  -> <canvas id="bg3d" style="position:fixed;inset:0;z-index:1;pointer-events:none;opacity:0.55;"></canvas>
+ ->  -> <canvas id="fx"></canvas>
+ ->  -> <nav class="chapter-nav" id="chapterNav" aria-label="Capítulos"></nav>
 
-  <div class="story">
-    <!-- CH 0: LOGIN -->
-    <section class="chapter chapter-hero" data-chapter="0" data-video-bright="0.9" data-video-y="0" id="acceso">
-      <div class="top-bar">
-        <div class="logo-mark"><span class="dot"></span> SYNAPSE_CORE</div>
-      </div>
-      <div class="panel" id="panel">
-        <div class="brand">SYNAPSE_CORE</div>
-        <h1 class="headline">TRADING BOT<br>ACCESS <span class="accent">TERMINAL</span></h1>
-        <p class="tagline">IQ Option · LightGBM · Bot autónomo 24/7</p>
-        <div class="status-line">
-          <div class="bar"></div>
-          <span>CREDENCIALES REQUERIDAS PARA CONECTAR...</span>
-        </div>
-        <form id="loginForm" autocomplete="off" onsubmit="event.preventDefault(); login();">
-          <div class="field">
-            <label for="emailInput">EMAIL_ADDRESS</label>
-            <div class="input-wrap">
-              <input type="email" id="emailInput" name="email" placeholder="tu@email.com" required />
-            </div>
-          </div>
-          <div class="field">
-            <label for="passwordInput">ACCESS_KEY</label>
-            <div class="input-wrap">
-              <input type="password" id="passwordInput" name="key" placeholder="••••••••" required />
-              <span class="eye" id="toggleKey">👁</span>
-            </div>
-          </div>
-          <button type="submit" class="btn-core" id="connectBtn">CONECTAR AL NÚCLEO</button>
-          <div id="loadingText" class="hidden" style="text-align: center; margin-top: 15px; color: var(--neon); font-size: 0.7rem; letter-spacing: 0.1em;">CONECTANDO AL NÚCLEO...</div>
-        </form>
-        <div class="panel-footer">
-          <div class="enc">🛡 SESIÓN SEGURA · BEARER</div>
-          <div class="force-logout" onclick="forceLogout()">△ Forzar cierre en todos los dispositivos</div>
-        </div>
-      </div>
-      <div class="scroll-hint">↓ Scroll para la historia</div>
-    </section>
+ ->  -> <div class="story">
+ ->  ->  -> <!-- CH 0: LOGIN -->
+ ->  ->  -> <section class="chapter chapter-hero" data-chapter="0" data-video-bright="0.9" data-video-y="0" id="acceso">
+ ->  ->  ->  -> <div class="top-bar">
+ ->  ->  ->  ->  -> <div class="logo-mark"><span class="dot"></span> SYNAPSE_CORE</div>
+ ->  ->  ->  -> </div>
+ ->  ->  ->  -> <div class="panel" id="panel">
+ ->  ->  ->  ->  -> <div class="brand">SYNAPSE_CORE</div>
+ ->  ->  ->  ->  -> <h1 class="headline">TRADING BOT<br>ACCESS <span class="accent">TERMINAL</span></h1>
+ ->  ->  ->  ->  -> <p class="tagline">IQ Option · LightGBM · Bot autónomo 24/7</p>
+ ->  ->  ->  ->  -> <div class="status-line">
+ ->  ->  ->  ->  ->  -> <div class="bar"></div>
+ ->  ->  ->  ->  ->  -> <span>CREDENCIALES REQUERIDAS PARA CONECTAR...</span>
+ ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  -> <form id="loginForm" autocomplete="off" onsubmit="event.preventDefault(); login();">
+ ->  ->  ->  ->  ->  -> <div class="field">
+ ->  ->  ->  ->  ->  ->  -> <label for="emailInput">EMAIL_ADDRESS</label>
+ ->  ->  ->  ->  ->  ->  -> <div class="input-wrap">
+ ->  ->  ->  ->  ->  ->  ->  -> <input type="email" id="emailInput" name="email" placeholder="tu@email.com" required />
+ ->  ->  ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  ->  -> <div class="field">
+ ->  ->  ->  ->  ->  ->  -> <label for="passwordInput">ACCESS_KEY</label>
+ ->  ->  ->  ->  ->  ->  -> <div class="input-wrap">
+ ->  ->  ->  ->  ->  ->  ->  -> <input type="password" id="passwordInput" name="key" placeholder="••••••••" required />
+ ->  ->  ->  ->  ->  ->  ->  -> <span class="eye" id="toggleKey">👁</span>
+ ->  ->  ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  ->  -> <button type="submit" class="btn-core" id="connectBtn">CONECTAR AL NÚCLEO</button>
+ ->  ->  ->  ->  ->  -> <div id="loadingText" class="hidden" style="text-align: center; margin-top: 15px; color: var(--neon); font-size: 0.7rem; letter-spacing: 0.1em;">CONECTANDO AL NÚCLEO...</div>
+ ->  ->  ->  ->  -> </form>
+ ->  ->  ->  ->  -> <div class="panel-footer">
+ ->  ->  ->  ->  ->  -> <div class="enc">🛡 SESIÓN SEGURA · BEARER</div>
+ ->  ->  ->  ->  ->  -> <div class="force-logout" onclick="forceLogout()">△ Forzar cierre en todos los dispositivos</div>
+ ->  ->  ->  ->  -> </div>
+ ->  ->  ->  -> </div>
+ ->  ->  ->  -> <div class="scroll-hint">↓ Scroll para la historia</div>
+ ->  ->  -> </section>
 
-    <!-- CH 1 -->
-    <section class="chapter" data-chapter="1" data-video-bright="0.55" data-video-y="8" id="ch1">
-      <div class="story-block story-glass">
-        <div class="chapter-label">Capítulo 01 · Qué es</div>
-        <h2 class="story-title">SynapseBot<br><span class="hl">Trading algorítmico</span></h2>
-        <p class="story-text">Bot de trading binario para <strong style="color:#fff">IQ Option</strong>. Analiza EURUSD-OTC en velas de 5 minutos, predice dirección con un modelo <strong style="color:#fff">LightGBM</strong> y puede operar solo — de forma manual o en modo servidor 24/7.</p>
-      </div>
-    </section>
+ ->  ->  -> <!-- CH 1 -->
+ ->  ->  -> <section class="chapter" data-chapter="1" data-video-bright="0.55" data-video-y="8" id="ch1">
+ ->  ->  ->  -> <div class="story-block story-glass">
+ ->  ->  ->  ->  -> <div class="chapter-label">Capítulo 01 · Qué es</div>
+ ->  ->  ->  ->  -> <h2 class="story-title typewriter" data-typewriter>SynapseBot<br><span class="hl">Trading algorítmico</span></h2>
+ ->  ->  ->  ->  -> <p class="story-text typewriter" data-typewriter data-type-delay="40">Bot de trading binario para <strong style="color:#fff">IQ Option</strong>. Analiza EURUSD-OTC en velas de 5 minutos, predice dirección con un modelo <strong style="color:#fff">LightGBM</strong> y puede operar solo — de forma manual o en modo servidor 24/7.</p>
+ ->  ->  ->  ->  -> <div class="extra-block">
+ ->  ->  ->  ->  ->  -> <h4 class="typewriter" data-typewriter data-type-delay="28">NÚCLEO DEL SISTEMA</h4>
+ ->  ->  ->  ->  ->  -> <ul>
+ ->  ->  ->  ->  ->  ->  -> <li class="typewriter" data-typewriter data-type-delay="22">Modelo LightGBM entrenado con features técnicos</li>
+ ->  ->  ->  ->  ->  ->  -> <li class="typewriter" data-typewriter data-type-delay="22">Gestión de riesgo adaptativa por racha y balance</li>
+ ->  ->  ->  ->  ->  ->  -> <li class="typewriter" data-typewriter data-type-delay="22">Ejecución manual o bot servidor 24/7</li>
+ ->  ->  ->  ->  ->  ->  -> <li class="typewriter" data-typewriter data-type-delay="22">Sesiones seguras con token Bearer</li>
+ ->  ->  ->  ->  ->  -> </ul>
+ ->  ->  ->  ->  -> </div>
+ ->  ->  ->  -> </div>
+ ->  ->  -> </section>
 
-    <!-- CH 2 -->
-    <section class="chapter" data-chapter="2" data-video-bright="0.45" data-video-y="15">
-      <div class="story-block story-glass">
-        <div class="chapter-label">Capítulo 02 · Cómo funciona</div>
-        <h2 class="story-title">Pipeline de<br><span class="hl">decisión</span></h2>
-        <div class="steps">
-          <div class="step"><div class="step-num">01</div><div><h4>VELAS EURUSD-OTC</h4><p>~120 velas de 5 min vía iqoptionapi. Expiración 1 min.</p></div></div>
-          <div class="step"><div class="step-num">02</div><div><h4>15 FEATURES</h4><p>RSI14, EMA20/50, MACD, Bollinger, ATR14, retornos y patrón Harami.</p></div></div>
-          <div class="step"><div class="step-num">03</div><div><h4>LIGHTGBM</h4><p>Probabilidad. PUT ≤0.45 · SKIP · CALL ≥0.52. Filtro de volatilidad.</p></div></div>
-          <div class="step"><div class="step-num">04</div><div><h4>GESTOR DE RIESGO</h4><p>% del balance, calidad de señal, rachas, stop-loss diario y tope de monto.</p></div></div>
-        </div>
-      </div>
-    </section>
+ ->  ->  -> <!-- CH 2 -->
+ ->  ->  -> <section class="chapter" data-chapter="2" data-video-bright="0.45" data-video-y="15">
+ ->  ->  ->  -> <div class="story-block story-glass">
+ ->  ->  ->  ->  -> <div class="chapter-label">Capítulo 02 · Cómo funciona</div>
+ ->  ->  ->  ->  -> <h2 class="story-title typewriter" data-typewriter>Pipeline de<br><span class="hl">decisión</span></h2>
+ ->  ->  ->  ->  -> <p class="story-text typewriter" data-typewriter data-type-delay="35" style="margin-bottom:1rem">Cada ciclo el núcleo transforma datos de mercado en una decisión ejecutable. Sin ruido. Sin improvisación.</p>
+ ->  ->  ->  ->  -> <div class="steps">
+ ->  ->  ->  ->  ->  -> <div class="step">
+ ->  ->  ->  ->  ->  ->  -> <div class="step-num">01</div>
+ ->  ->  ->  ->  ->  ->  -> <div>
+ ->  ->  ->  ->  ->  ->  ->  -> <h4>VELAS EURUSD-OTC</h4>
+ ->  ->  ->  ->  ->  ->  ->  -> <p>~120 velas de 5 min vía iqoptionapi. Expiración 1 min.</p>
+ ->  ->  ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  ->  -> <div class="step">
+ ->  ->  ->  ->  ->  ->  -> <div class="step-num">02</div>
+ ->  ->  ->  ->  ->  ->  -> <div>
+ ->  ->  ->  ->  ->  ->  ->  -> <h4>15 FEATURES</h4>
+ ->  ->  ->  ->  ->  ->  ->  -> <p>RSI14, EMA20/50, MACD, Bollinger, ATR14, retornos y patrón Harami.</p>
+ ->  ->  ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  ->  -> <div class="step">
+ ->  ->  ->  ->  ->  ->  -> <div class="step-num">03</div>
+ ->  ->  ->  ->  ->  ->  -> <div>
+ ->  ->  ->  ->  ->  ->  ->  -> <h4>LIGHTGBM</h4>
+ ->  ->  ->  ->  ->  ->  ->  -> <p>Probabilidad. PUT ≤0.45 · SKIP · CALL ≥0.52. Filtro de volatilidad.</p>
+ ->  ->  ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  ->  -> <div class="step">
+ ->  ->  ->  ->  ->  ->  -> <div class="step-num">04</div>
+ ->  ->  ->  ->  ->  ->  -> <div>
+ ->  ->  ->  ->  ->  ->  ->  -> <h4>GESTOR DE RIESGO</h4>
+ ->  ->  ->  ->  ->  ->  ->  -> <p>% del balance, calidad de señal, rachas, stop-loss diario y tope de monto.</p>
+ ->  ->  ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  -> </div>
+ ->  ->  ->  -> </div>
+ ->  ->  -> </section>
 
-    <!-- CH 3 -->
-    <section class="chapter" data-chapter="3" data-video-bright="0.4" data-video-y="20">
-      <div class="story-block">
-        <div class="chapter-label">Capítulo 03 · Capacidades</div>
-        <h2 class="story-title">Qué puede<br><span class="hl">hacer el bot</span></h2>
-        <div class="stats-row">
-          <div class="stat-pill"><span class="v">24/7</span><span class="l">Bot servidor</span></div>
-          <div class="stat-pill"><span class="v">DEMO</span><span class="l">+ Cuenta real</span></div>
-          <div class="stat-pill"><span class="v">15</span><span class="l">Features ML</span></div>
-          <div class="stat-pill"><span class="v">1M</span><span class="l">Expiración</span></div>
-        </div>
-      </div>
-    </section>
+ ->  ->  -> <!-- CH 3 -->
+ ->  ->  -> <section class="chapter" data-chapter="3" data-video-bright="0.4" data-video-y="20">
+ ->  ->  ->  -> <div class="story-block">
+ ->  ->  ->  ->  -> <div class="chapter-label">Capítulo 03 · Capacidades</div>
+ ->  ->  ->  ->  -> <h2 class="story-title typewriter" data-typewriter>Qué puede<br><span class="hl">hacer el bot</span></h2>
+ ->  ->  ->  ->  -> <p class="story-text typewriter" data-typewriter data-type-delay="35">Diseñado para operar con disciplina: límites diarios, protección por racha y montos calculados según tu balance.</p>
+ ->  ->  ->  ->  -> <div class="stats-row">
+ ->  ->  ->  ->  ->  -> <div class="stat-pill"><span class="v">24/7</span><span class="l">Bot servidor</span></div>
+ ->  ->  ->  ->  ->  -> <div class="stat-pill"><span class="v">DEMO</span><span class="l">+ Cuenta real</span></div>
+ ->  ->  ->  ->  ->  -> <div class="stat-pill"><span class="v">15</span><span class="l">Features ML</span></div>
+ ->  ->  ->  ->  ->  -> <div class="stat-pill"><span class="v">1M</span><span class="l">Expiración</span></div>
+ ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  -> <div class="feature-grid">
+ ->  ->  ->  ->  ->  -> <div class="feature-chip"><span class="fc-v">STOP LOSS</span><span class="fc-l">Diario configurable</span></div>
+ ->  ->  ->  ->  ->  -> <div class="feature-chip"><span class="fc-v">TAKE PROFIT</span><span class="fc-l">Cierre automático</span></div>
+ ->  ->  ->  ->  ->  -> <div class="feature-chip"><span class="fc-v">RACHA</span><span class="fc-l">Reduce riesgo 50%</span></div>
+ ->  ->  ->  ->  ->  -> <div class="feature-chip"><span class="fc-v">MONTO AUTO</span><span class="fc-l">% del balance</span></div>
+ ->  ->  ->  ->  -> </div>
+ ->  ->  ->  -> </div>
+ ->  ->  -> </section>
 
-    <!-- CH 4 -->
-    <section class="chapter" data-chapter="4" data-video-bright="0.35" data-video-y="25" id="ch4">
-      <div class="story-block story-glass">
-        <div class="chapter-label">Capítulo 04 · Señal en vivo</div>
-        <h2 class="story-title">Lo que ve el<br><span class="hl">modelo</span></h2>
-        <div class="live-box">
-          <div class="live-head"><span class="pair">EURUSD-OTC · 5M</span><span class="badge">LIVE</span></div>
-          <canvas id="miniChart"></canvas>
-          <div class="live-metrics">
-            <div class="metric"><div class="mv" id="mRsi">—</div><div class="ml">RSI 14</div></div>
-            <div class="metric"><div class="mv" id="mProb">—</div><div class="ml">Probabilidad</div></div>
-            <div class="metric"><div class="mv" id="mSignal">SKIP</div><div class="ml">Señal</div></div>
-          </div>
-        </div>
-      </div>
-    </section>
+ ->  ->  -> <!-- CH 4 -->
+ ->  ->  -> <section class="chapter" data-chapter="4" data-video-bright="0.35" data-video-y="25" id="ch4">
+ ->  ->  ->  -> <div class="story-block story-glass">
+ ->  ->  ->  ->  -> <div class="chapter-label">Capítulo 04 · Señal en vivo</div>
+ ->  ->  ->  ->  -> <h2 class="story-title typewriter" data-typewriter>Lo que ve el<br><span class="hl">modelo</span></h2>
+ ->  ->  ->  ->  -> <p class="story-text typewriter" data-typewriter data-type-delay="35">Simulación de la señal en tiempo real: RSI, probabilidad y decisión CALL / PUT / SKIP.</p>
+ ->  ->  ->  ->  -> <div class="live-box">
+ ->  ->  ->  ->  ->  -> <div class="live-head"><span class="pair">EURUSD-OTC · 5M</span><span class="badge">LIVE</span></div>
+ ->  ->  ->  ->  ->  -> <canvas id="miniChart"></canvas>
+ ->  ->  ->  ->  ->  -> <div class="live-metrics">
+ ->  ->  ->  ->  ->  ->  -> <div class="metric">
+ ->  ->  ->  ->  ->  ->  ->  -> <div class="mv" id="mRsi">—</div>
+ ->  ->  ->  ->  ->  ->  ->  -> <div class="ml">RSI 14</div>
+ ->  ->  ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  ->  ->  -> <div class="metric">
+ ->  ->  ->  ->  ->  ->  ->  -> <div class="mv" id="mProb">—</div>
+ ->  ->  ->  ->  ->  ->  ->  -> <div class="ml">Probabilidad</div>
+ ->  ->  ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  ->  ->  -> <div class="metric">
+ ->  ->  ->  ->  ->  ->  ->  -> <div class="mv" id="mSignal">SKIP</div>
+ ->  ->  ->  ->  ->  ->  ->  -> <div class="ml">Señal</div>
+ ->  ->  ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  -> </div>
+ ->  ->  ->  -> </div>
+ ->  ->  -> </section>
 
-    <!-- CH 5 -->
-    <section class="chapter" data-chapter="5" data-video-bright="0.7" data-video-y="5">
-      <div class="story-block story-glass">
-        <div class="chapter-label">Capítulo 05 · Arquitectura</div>
-        <h2 class="story-title">Cómo está<br><span class="hl">construido</span></h2>
-        <p class="story-text" style="text-align:left">
-          <strong style="color:#fff">server.py</strong> — HTTP + sesiones + bot 24/7<br>
-          <strong style="color:#fff">operar.py</strong> — Features, LightGBM, riesgo y trades<br>
-          <strong style="color:#fff">index.html</strong> — Terminal de acceso y dashboard
-        </p>
-        <a href="#acceso" class="cta-btn" id="ctaTop">IR AL TERMINAL</a>
-      </div>
-    </section>
-  </div>
+ ->  ->  -> <!-- CH 5 -->
+ ->  ->  -> <section class="chapter" data-chapter="5" data-video-bright="0.7" data-video-y="5">
+ ->  ->  ->  -> <div class="story-block story-glass">
+ ->  ->  ->  ->  -> <div class="chapter-label">Capítulo 05 · Arquitectura</div>
+ ->  ->  ->  ->  -> <h2 class="story-title typewriter" data-typewriter>Cómo está<br><span class="hl">construido</span></h2>
+ ->  ->  ->  ->  -> <p class="story-text typewriter" data-typewriter data-type-delay="30" style="text-align:left">
+ ->  ->  ->  ->  ->  -> <strong style="color:#fff">server.py</strong> — HTTP + sesiones + bot 24/7<br>
+ ->  ->  ->  ->  ->  -> <strong style="color:#fff">operar.py</strong> — Features, LightGBM, riesgo y trades<br>
+ ->  ->  ->  ->  ->  -> <strong style="color:#fff">index.html</strong> — Terminal de acceso y dashboard
+ ->  ->  ->  ->  -> </p>
+ ->  ->  ->  ->  -> <div class="extra-block">
+ ->  ->  ->  ->  ->  -> <h4 class="typewriter" data-typewriter data-type-delay="28">STACK TÉCNICO</h4>
+ ->  ->  ->  ->  ->  -> <ul>
+ ->  ->  ->  ->  ->  ->  -> <li class="typewriter" data-typewriter data-type-delay="20">Python · Flask · iqoptionapi</li>
+ ->  ->  ->  ->  ->  ->  -> <li class="typewriter" data-typewriter data-type-delay="20">LightGBM + indicadores técnicos</li>
+ ->  ->  ->  ->  ->  ->  -> <li class="typewriter" data-typewriter data-type-delay="20">Frontend terminal SYNAPSE_CORE</li>
+ ->  ->  ->  ->  ->  ->  -> <li class="typewriter" data-typewriter data-type-delay="20">Deploy listo (Docker / Fly.io)</li>
+ ->  ->  ->  ->  ->  -> </ul>
+ ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  -> <a href="#acceso" class="cta-btn" id="ctaTop">IR AL TERMINAL</a>
+ ->  ->  ->  -> </div>
+ ->  ->  -> </section>
+ ->  -> </div>
 
-  <footer class="site-footer">
-    <div class="footer-inner">
-      <div class="footer-brand">
-        <div class="logo">SYNAPSE_CORE</div>
-        <p>Bot de trading algorítmico para IQ Option. LightGBM, riesgo adaptativo y ejecución 24/7.</p>
-        <div class="socials">
-          <a href="https://x.com/CiancioRen53256" target="_blank" rel="noopener" title="X">𝕏</a>
-          <a href="https://t.me/anonimatus5" target="_blank" rel="noopener" title="Telegram">✈</a>
-          <a href="https://github.com/Eliezer1817" target="_blank" rel="noopener" title="GitHub">⌘</a>
-        </div>
-      </div>
-      <div class="status-box">
-        <div class="s-label">Estado del sistema</div>
-        <div class="s-name">SYNAPSE_CORE</div>
-        <div class="s-online">ONLINE</div>
-        <div class="s-sub">Todos los sistemas operativos</div>
-      </div>
-    </div>
-    <div class="footer-bottom">© 2026 SYNAPSE_CORE · Eliezer1817</div>
-  </footer>
-  <button class="sound-btn" id="soundBtn">🔊 ACTIVAR SONIDO</button>
-</div>
+ ->  -> <footer class="site-footer">
+ ->  ->  -> <div class="footer-inner">
+ ->  ->  ->  -> <div class="footer-brand">
+ ->  ->  ->  ->  -> <div class="logo">SYNAPSE_CORE</div>
+ ->  ->  ->  ->  -> <p>Bot de trading algorítmico para IQ Option. LightGBM, riesgo adaptativo y ejecución 24/7.</p>
+ ->  ->  ->  ->  -> <div class="socials">
+ ->  ->  ->  ->  ->  -> <a href="https://x.com/CiancioRen53256" target="_blank" rel="noopener" title="X">𝕏</a>
+ ->  ->  ->  ->  ->  -> <a href="https://t.me/anonimatus5" target="_blank" rel="noopener" title="Telegram">✈</a>
+ ->  ->  ->  ->  ->  -> <a href="https://github.com/Eliezer1817" target="_blank" rel="noopener" title="GitHub">⌘</a>
+ ->  ->  ->  ->  -> </div>
+ ->  ->  ->  -> </div>
+ ->  ->  ->  -> <div class="status-box">
+ ->  ->  ->  ->  -> <div class="s-label">Estado del sistema</div>
+ ->  ->  ->  ->  -> <div class="s-name">SYNAPSE_CORE</div>
+ ->  ->  ->  ->  -> <div class="s-online">ONLINE</div>
+ ->  ->  ->  ->  -> <div class="s-sub">Todos los sistemas operativos</div>
+ ->  ->  ->  -> </div>
+ ->  ->  -> </div>
+ ->  ->  -> <div class="footer-bottom">© 2026 SYNAPSE_CORE · Eliezer1817</div>
+ ->  -> </footer>
+ ->  -> <button class="sound-btn" id="soundBtn">🔊 ACTIVAR SONIDO</button>
+ -> </div>
 
-<!-- ==================== DASHBOARD FUTURISTA ==================== -->
-<div id="dashboard" class="dashboard hidden">
-  <div class="dash-container">
-    <!-- Top Bar -->
-    <div class="top-bar-dash">
-      <div class="user-info">
-        <div class="status-dot"></div>
-        <div>
-          <div class="user-name" id="userName">Usuario</div>
-          <div class="user-status"> CONECTADO AL NÚCLEO</div>
-        </div>
-      </div>
-      <div class="dash-actions">
-        <button class="btn-dash" onclick="resetRiesgo()">🔄 RESET RIESGO</button>
-        <button class="btn-dash danger" onclick="logout()">⏻ DESCONECTAR</button>
-      </div>
-    </div>
+ -> <!-- ==================== DASHBOARD FUTURISTA ==================== -->
+ -> <div id="dashboard" class="dashboard hidden">
+ ->  -> <div class="dash-container">
+ ->  ->  -> <!-- Top Bar -->
+ ->  ->  -> <div class="top-bar-dash">
+ ->  ->  ->  -> <div class="user-info">
+ ->  ->  ->  ->  -> <div class="status-dot"></div>
+ ->  ->  ->  ->  -> <div>
+ ->  ->  ->  ->  ->  -> <div class="user-name" id="userName">Usuario</div>
+ ->  ->  ->  ->  ->  -> <div class="user-status"> CONECTADO AL NÚCLEO</div>
+ ->  ->  ->  ->  -> </div>
+ ->  ->  ->  -> </div>
+ ->  ->  ->  -> <div class="dash-actions">
+ ->  ->  ->  ->  -> <button class="btn-dash" onclick="resetRiesgo()">🔄 RESET RIESGO</button>
+ ->  ->  ->  ->  -> <button class="btn-dash danger" onclick="logout()">⏻ DESCONECTAR</button>
+ ->  ->  ->  -> </div>
+ ->  ->  -> </div>
 
-    <!-- Stats -->
-    <div class="stats-grid">
-      <div class="stat-card"><div class="stat-label">Balance Total</div><div class="stat-value" id="totalBalance">$0.00</div></div>
-      <div class="stat-card"><div class="stat-label">Operaciones</div><div class="stat-value" id="tradesCount">0</div></div>
-      <div class="stat-card"><div class="stat-label">Profit / Loss</div><div class="stat-value" id="profitLoss">$0.00</div></div>
-      <div class="stat-card"><div class="stat-label">Win Rate</div><div class="stat-value" id="winRate">0%</div></div>
-    </div>
+ ->  ->  -> <!-- Stats -->
+ ->  ->  -> <div class="stats-grid">
+ ->  ->  ->  -> <div class="stat-card">
+ ->  ->  ->  ->  -> <div class="stat-label">Balance Total</div>
+ ->  ->  ->  ->  -> <div class="stat-value" id="totalBalance">$0.00</div>
+ ->  ->  ->  -> </div>
+ ->  ->  ->  -> <div class="stat-card">
+ ->  ->  ->  ->  -> <div class="stat-label">Operaciones</div>
+ ->  ->  ->  ->  -> <div class="stat-value" id="tradesCount">0</div>
+ ->  ->  ->  -> </div>
+ ->  ->  ->  -> <div class="stat-card">
+ ->  ->  ->  ->  -> <div class="stat-label">Profit / Loss</div>
+ ->  ->  ->  ->  -> <div class="stat-value" id="profitLoss">$0.00</div>
+ ->  ->  ->  -> </div>
+ ->  ->  ->  -> <div class="stat-card">
+ ->  ->  ->  ->  -> <div class="stat-label">Win Rate</div>
+ ->  ->  ->  ->  -> <div class="stat-value" id="winRate">0%</div>
+ ->  ->  ->  -> </div>
+ ->  ->  -> </div>
 
-    <!-- Control Panel -->
-    <div class="control-panel">
-      <h2 class="panel-title">🎮 PANEL DE CONTROL</h2>
-      <div class="control-grid">
-        <div class="control-item">
-          <label class="control-label">Tipo de Cuenta</label>
-          <select id="accountMode" class="control-select">
+ ->  ->  -> <!-- Control Panel -->
+ ->  ->  -> <div class="control-panel">
+ ->  ->  ->  -> <h2 class="panel-title">🎮 PANEL DE CONTROL</h2>
+ ->  ->  ->  -> <div class="control-grid">
+ ->  ->  ->  ->  -> <div class="control-item">
+ ->  ->  ->  ->  ->  -> <label class="control-label">Tipo de Cuenta</label>
+ ->  ->  ->  ->  ->  -> <select id="accountMode" class="control-select">
             <option value="demo">DEMO (Práctica)</option>
             <option value="real">REAL</option>
           </select>
-        </div>
-        <div class="control-item">
-          <label class="control-label">Intervalo de Análisis (min)</label>
-          <input type="number" id="intervalMinutes" class="control-input" value="5" min="1" max="60" step="1">
-        </div>
-        <div class="control-item">
-          <label class="control-label">Tipo de Monto</label>
-          <select id="tipoMonto" class="control-select" onchange="toggleTipoMonto()">
+ ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  -> <div class="control-item">
+ ->  ->  ->  ->  ->  -> <label class="control-label">Intervalo de Análisis (min)</label>
+ ->  ->  ->  ->  ->  -> <input type="number" id="intervalMinutes" class="control-input" value="5" min="1" max="60" step="1">
+ ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  -> <div class="control-item">
+ ->  ->  ->  ->  ->  -> <label class="control-label">Tipo de Monto</label>
+ ->  ->  ->  ->  ->  -> <select id="tipoMonto" class="control-select" onchange="toggleTipoMonto()">
             <option value="auto">🤖 Automático</option>
             <option value="fijo">💰 Monto Fijo</option>
           </select>
-        </div>
-        <div class="control-item" id="montoFijoContainer" style="display: none;">
-          <label class="control-label">Monto Fijo ($)</label>
-          <input type="number" id="tradeAmount" class="control-input" value="1" min="1" step="1">
-        </div>
-      </div>
+ ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  -> <div class="control-item" id="montoFijoContainer" style="display: none;">
+ ->  ->  ->  ->  ->  -> <label class="control-label">Monto Fijo ($)</label>
+ ->  ->  ->  ->  ->  -> <input type="number" id="tradeAmount" class="control-input" value="1" min="1" step="1">
+ ->  ->  ->  ->  -> </div>
+ ->  ->  ->  -> </div>
 
-      <!-- Risk Config -->
-      <div class="risk-config-section">
-        <h3>🎯 GESTIÓN INTELIGENTE DE RIESGO</h3>
-        <div class="config-help">💡 Misma configuración para Demo y Real - Entrena como si fuera real</div>
-        <div class="control-grid">
-          <div class="control-item">
-            <label class="control-label">% Riesgo por Operación</label>
-            <div class="slider-container">
-              <input type="range" id="riesgoPorcentaje" min="0.5" max="5" step="0.1" value="2">
-              <span class="slider-value" id="riesgoValue">2%</span>
-            </div>
-          </div>
-          <div class="control-item">
-            <label class="control-label">Protección por Racha</label>
-            <input type="number" id="maxPerdidasConsecutivas" class="control-input" value="3" min="2" max="6">
-          </div>
-          <div class="control-item">
-            <label class="control-label">Stop Loss Diario (%)</label>
-            <div class="slider-container">
-              <input type="range" id="stopLossDiario" min="5" max="30" step="1" value="15">
-              <span class="slider-value" id="stopLossValue">15%</span>
-            </div>
-          </div>
-          <div class="control-item">
-            <label class="control-label">Take Profit Diario (%)</label>
-            <div class="slider-container">
-              <input type="range" id="takeProfitDiario" min="5" max="50" step="1" value="20">
-              <span class="slider-value" id="takeProfitValue">20%</span>
-            </div>
-          </div>
-          <div class="control-item">
-            <label class="control-label">Monto Máximo por Operación ($)</label>
-            <input type="number" id="montoMaximo" class="control-input" value="10" min="2" max="50" step="1">
-          </div>
-        </div>
-        <div class="risk-monitor">
-          <h4>📈 MONITOR DE RIESGO EN TIEMPO REAL</h4>
-          <div class="risk-metrics">
-            <div class="risk-metric"><span class="metric-label">Monto Sugerido</span><span class="metric-value" id="montoSugerido">$0.00</span></div>
-            <div class="risk-metric"><span class="metric-label">Racha Actual</span><span class="metric-value" id="rachaActual">0</span></div>
-            <div class="risk-metric"><span class="metric-label">Riesgo Actual</span><span class="metric-value" id="riesgoActual">2.0%</span></div>
-            <div class="risk-metric"><span class="metric-label">Profit Hoy</span><span class="metric-value" id="profitHoy">$0.00</span></div>
-          </div>
-        </div>
-      </div>
+ ->  ->  ->  -> <!-- Risk Config -->
+ ->  ->  ->  -> <div class="risk-config-section">
+ ->  ->  ->  ->  -> <h3>🎯 GESTIÓN INTELIGENTE DE RIESGO</h3>
+ ->  ->  ->  ->  -> <div class="config-help">💡 Misma configuración para Demo y Real - Entrena como si fuera real</div>
+ ->  ->  ->  ->  -> <div class="control-grid">
+ ->  ->  ->  ->  ->  -> <div class="control-item">
+ ->  ->  ->  ->  ->  ->  -> <label class="control-label">% Riesgo por Operación</label>
+ ->  ->  ->  ->  ->  ->  -> <div class="slider-container">
+ ->  ->  ->  ->  ->  ->  ->  -> <input type="range" id="riesgoPorcentaje" min="0.5" max="5" step="0.1" value="2">
+ ->  ->  ->  ->  ->  ->  ->  -> <span class="slider-value" id="riesgoValue">2%</span>
+ ->  ->  ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  ->  -> <div class="control-item">
+ ->  ->  ->  ->  ->  ->  -> <label class="control-label">Protección por Racha</label>
+ ->  ->  ->  ->  ->  ->  -> <input type="number" id="maxPerdidasConsecutivas" class="control-input" value="3" min="2" max="6">
+ ->  ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  ->  -> <div class="control-item">
+ ->  ->  ->  ->  ->  ->  -> <label class="control-label">Stop Loss Diario (%)</label>
+ ->  ->  ->  ->  ->  ->  -> <div class="slider-container">
+ ->  ->  ->  ->  ->  ->  ->  -> <input type="range" id="stopLossDiario" min="5" max="30" step="1" value="15">
+ ->  ->  ->  ->  ->  ->  ->  -> <span class="slider-value" id="stopLossValue">15%</span>
+ ->  ->  ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  ->  -> <div class="control-item">
+ ->  ->  ->  ->  ->  ->  -> <label class="control-label">Take Profit Diario (%)</label>
+ ->  ->  ->  ->  ->  ->  -> <div class="slider-container">
+ ->  ->  ->  ->  ->  ->  ->  -> <input type="range" id="takeProfitDiario" min="5" max="50" step="1" value="20">
+ ->  ->  ->  ->  ->  ->  ->  -> <span class="slider-value" id="takeProfitValue">20%</span>
+ ->  ->  ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  ->  -> <div class="control-item">
+ ->  ->  ->  ->  ->  ->  -> <label class="control-label">Monto Máximo por Operación ($)</label>
+ ->  ->  ->  ->  ->  ->  -> <input type="number" id="montoMaximo" class="control-input" value="10" min="2" max="50" step="1">
+ ->  ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  -> <div class="risk-monitor">
+ ->  ->  ->  ->  ->  -> <h4>📈 MONITOR DE RIESGO EN TIEMPO REAL</h4>
+ ->  ->  ->  ->  ->  -> <div class="risk-metrics">
+ ->  ->  ->  ->  ->  ->  -> <div class="risk-metric"><span class="metric-label">Monto Sugerido</span><span class="metric-value" id="montoSugerido">$0.00</span></div>
+ ->  ->  ->  ->  ->  ->  -> <div class="risk-metric"><span class="metric-label">Racha Actual</span><span class="metric-value" id="rachaActual">0</span></div>
+ ->  ->  ->  ->  ->  ->  -> <div class="risk-metric"><span class="metric-label">Riesgo Actual</span><span class="metric-value" id="riesgoActual">2.0%</span></div>
+ ->  ->  ->  ->  ->  ->  -> <div class="risk-metric"><span class="metric-label">Profit Hoy</span><span class="metric-value" id="profitHoy">$0.00</span></div>
+ ->  ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  -> </div>
+ ->  ->  ->  -> </div>
 
-      <!-- Action Buttons -->
-      <div class="action-buttons">
-        <button class="btn-action blue" id="serverBotBtn" onclick="iniciarBotServidor()">🚀 BOT 24/7 SERVIDOR</button>
-        <button class="btn-action orange" id="manualBtn" onclick="operacionManual()">🎯 OPERACIÓN MANUAL</button>
-        <button class="btn-action red" id="stopServerBotBtn" onclick="detenerBotServidor()">🛑 DETENER BOT SERVIDOR</button>
-      </div>
+ ->  ->  ->  -> <!-- Action Buttons -->
+ ->  ->  ->  -> <div class="action-buttons">
+ ->  ->  ->  ->  -> <button class="btn-action blue" id="serverBotBtn" onclick="iniciarBotServidor()">🚀 BOT 24/7 SERVIDOR</button>
+ ->  ->  ->  ->  -> <button class="btn-action orange" id="manualBtn" onclick="operacionManual()">🎯 OPERACIÓN MANUAL</button>
+ ->  ->  ->  ->  -> <button class="btn-action red" id="stopServerBotBtn" onclick="detenerBotServidor()">🛑 DETENER BOT SERVIDOR</button>
+ ->  ->  ->  -> </div>
 
-      <!-- Server Bot Status -->
-      <div id="serverBotStatus" class="server-status" style="display: none;">
-        <div class="server-status-header">
-          <div class="server-status-dot"></div>
-          <strong class="server-status-title">🤖 BOT SERVIDOR ACTIVO 24/7</strong>
-        </div>
-        <div class="server-status-info">
-          ✅ Funciona con celular apagado<br>
-          ⚡ Operando automáticamente cada <span id="serverInterval">5</span> minutos<br>
-          Última operación: <span id="lastServerOperation">-</span>
-        </div>
-      </div>
-    </div>
+ ->  ->  ->  -> <!-- Server Bot Status -->
+ ->  ->  ->  -> <div id="serverBotStatus" class="server-status" style="display: none;">
+ ->  ->  ->  ->  -> <div class="server-status-header">
+ ->  ->  ->  ->  ->  -> <div class="server-status-dot"></div>
+ ->  ->  ->  ->  ->  -> <strong class="server-status-title">🤖 BOT SERVIDOR ACTIVO 24/7</strong>
+ ->  ->  ->  ->  -> </div>
+ ->  ->  ->  ->  -> <div class="server-status-info">
+ ->  ->  ->  ->  ->  -> ✅ Funciona con celular apagado<br> ⚡ Operando automáticamente cada <span id="serverInterval">5</span> minutos<br> Última operación: <span id="lastServerOperation">-</span>
+ ->  ->  ->  ->  -> </div>
+ ->  ->  ->  -> </div>
+ ->  ->  -> </div>
 
-    <!-- Accounts -->
-    <div class="accounts-section">
-      <div class="account-card">
-        <div class="account-header"><span class="account-icon">💰</span><h3 class="account-title">CUENTA REAL</h3></div>
-        <div class="account-balance" id="realBalance">$0.00</div>
-        <div class="account-id">ID: <span id="realId">-</span></div>
-      </div>
-      <div class="account-card">
-        <div class="account-header"><span class="account-icon"></span><h3 class="account-title">CUENTA DEMO</h3></div>
-        <div class="account-balance" id="demoBalance">$0.00</div>
-        <div class="account-id">ID: <span id="demoId">-</span></div>
-      </div>
-    </div>
+ ->  ->  -> <!-- Accounts -->
+ ->  ->  -> <div class="accounts-section">
+ ->  ->  ->  -> <div class="account-card">
+ ->  ->  ->  ->  -> <div class="account-header"><span class="account-icon">💰</span>
+ ->  ->  ->  ->  ->  -> <h3 class="account-title">CUENTA REAL</h3></div>
+ ->  ->  ->  ->  -> <div class="account-balance" id="realBalance">$0.00</div>
+ ->  ->  ->  ->  -> <div class="account-id">ID: <span id="realId">-</span></div>
+ ->  ->  ->  -> </div>
+ ->  ->  ->  -> <div class="account-card">
+ ->  ->  ->  ->  -> <div class="account-header"><span class="account-icon"></span>
+ ->  ->  ->  ->  ->  -> <h3 class="account-title">CUENTA DEMO</h3></div>
+ ->  ->  ->  ->  -> <div class="account-balance" id="demoBalance">$0.00</div>
+ ->  ->  ->  ->  -> <div class="account-id">ID: <span id="demoId">-</span></div>
+ ->  ->  ->  -> </div>
+ ->  ->  -> </div>
 
-    <!-- History -->
-    <div class="history-section">
-      <div class="history-header">
-        <h2 class="panel-title">📊 HISTORIAL DE OPERACIONES</h2>
-        <button class="btn-clear" onclick="clearHistory()">LIMPIAR</button>
-      </div>
-      <div class="trade-list" id="tradeList">
-        <div class="empty-history">No hay operaciones registradas</div>
-      </div>
-    </div>
-  </div>
-</div>
+ ->  ->  -> <!-- History -->
+ ->  ->  -> <div class="history-section">
+ ->  ->  ->  -> <div class="history-header">
+ ->  ->  ->  ->  -> <h2 class="panel-title">📊 HISTORIAL DE OPERACIONES</h2>
+ ->  ->  ->  ->  -> <button class="btn-clear" onclick="clearHistory()">LIMPIAR</button>
+ ->  ->  ->  -> </div>
+ ->  ->  ->  -> <div class="trade-list" id="tradeList">
+ ->  ->  ->  ->  -> <div class="empty-history">No hay operaciones registradas</div>
+ ->  ->  ->  -> </div>
+ ->  ->  -> </div>
+ ->  -> </div>
+ -> </div>
 
-<script>
-// ==================== LANDING PAGE ANIMATIONS & AUDIO ====================
-const chapters = [...document.querySelectorAll('.chapter')];
-const nav = document.getElementById('chapterNav');
-chapters.forEach((ch, i) => {
-  const btn = document.createElement('button');
-  btn.setAttribute('aria-label', 'Capítulo ' + i);
-  btn.onclick = () => ch.scrollIntoView({ behavior: 'smooth' });
-  nav.appendChild(btn);
-});
-const navBtns = [...nav.querySelectorAll('button')];
-
-const video = document.getElementById('bgVideo');
-const vignette = document.getElementById('vignette');
-const progress = document.getElementById('progress');
-let currentChapter = 0;
-let ticking = false;
-
-function updateStory() {
-  const scrollY = window.scrollY;
-  const docH = document.documentElement.scrollHeight - window.innerHeight;
-  progress.style.width = (docH > 0 ? (scrollY / docH) * 100 : 0) + '%';
-  let active = 0;
-  let best = Infinity;
-  chapters.forEach((ch, i) => {
-    const rect = ch.getBoundingClientRect();
-    const mid = Math.abs(rect.top + rect.height / 2 - window.innerHeight / 2);
-    if (mid < best) { best = mid; active = i; }
-    const visible = rect.top < window.innerHeight * 0.65 && rect.bottom > window.innerHeight * 0.25;
-    ch.classList.toggle('in-view', visible);
-  });
-  if (active !== currentChapter) {
-    currentChapter = active;
-    navBtns.forEach((b, i) => b.classList.toggle('active', i === active));
-  }
-  const ch = chapters[active];
-  const bright = parseFloat(ch.dataset.videoBright || 0.85);
-  const yShift = parseFloat(ch.dataset.videoY || 0);
-  video.style.filter = `contrast(1.1) brightness(${bright}) saturate(1.1)`;
-  video.style.transform = `scale(1.08) translate3d(0, ${yShift}px, 0)`;
-  vignette.style.opacity = String(0.7 + (1 - bright) * 0.5);
-  ticking = false;
-}
-function onScroll() {
-  if (!ticking) { requestAnimationFrame(updateStory); ticking = true; }
-}
-window.addEventListener('scroll', onScroll, { passive: true });
-window.addEventListener('resize', onScroll, { passive: true });
-chapters[0].classList.add('in-view');
-navBtns[0].classList.add('active');
-updateStory();
-
-document.getElementById('ctaTop').addEventListener('click', (e) => {
-  e.preventDefault();
-  document.getElementById('acceso').scrollIntoView({ behavior: 'smooth' });
-});
-
-// Audio
-const AMBIENT_URL = 'https://litter.catbox.moe/fp1xsc.mp3';
-let audioCtx = null, masterGain = null, ambientEl = null, isSoundOn = false;
-function ensureAudioCtx() {
-  if (audioCtx) return;
-  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  masterGain = audioCtx.createGain();
-  masterGain.gain.value = 0.85;
-  masterGain.connect(audioCtx.destination);
-}
-function startAmbient() {
-  ensureAudioCtx();
-  if (audioCtx.state === 'suspended') audioCtx.resume();
-  if (!ambientEl) {
-    ambientEl = new Audio(AMBIENT_URL);
-    ambientEl.loop = true; ambientEl.preload = 'auto'; ambientEl.volume = 0.45;
-  }
-  ambientEl.play().catch(() => {});
-  isSoundOn = true;
-  const btn = document.getElementById('soundBtn');
-  btn.textContent = '🔊 SONIDO ON'; btn.classList.add('active');
-}
-function stopAmbient() {
-  if (ambientEl) { ambientEl.pause(); ambientEl.currentTime = 0; }
-  isSoundOn = false;
-  const btn = document.getElementById('soundBtn');
-  btn.textContent = '🔊 ACTIVAR SONIDO'; btn.classList.remove('active');
-}
-document.getElementById('soundBtn').onclick = () => { if (!isSoundOn) startAmbient(); else stopAmbient(); };
-
-document.getElementById('toggleKey').onclick = () => {
-  const inp = document.getElementById('passwordInput');
-  const is = inp.type === 'password';
-  inp.type = is ? 'text' : 'password';
-  document.getElementById('toggleKey').textContent = is ? '🔒' : '👁';
-};
-
-// Mini Chart
-const mc = document.getElementById('miniChart');
-const mctx = mc.getContext('2d');
-let prices = [], rsi = 52, prob = 0.5, signal = 'SKIP';
-function initChart() {
-  const dpr = devicePixelRatio || 1;
-  mc.width = mc.offsetWidth * dpr; mc.height = 110 * dpr;
-  mctx.setTransform(dpr,0,0,dpr,0,0);
-  prices = []; let p = 1.085;
-  for (let i=0;i<55;i++){ p += (Math.random()-0.48)*0.001; prices.push(p); }
-}
-function drawChart() {
-  const w = mc.offsetWidth, h = 110;
-  mctx.clearRect(0,0,w,h);
-  const min = Math.min(...prices), max = Math.max(...prices);
-  const range = max-min || 0.001;
-  mctx.beginPath();
-  prices.forEach((p,i)=>{
-    const x = (i/(prices.length-1))*w;
-    const y = h - ((p-min)/range)*(h-14) - 7;
-    i? mctx.lineTo(x,y) : mctx.moveTo(x,y);
-  });
-  mctx.strokeStyle = 'rgba(255,90,0,0.85)'; mctx.lineWidth = 1.7;
-  mctx.shadowBlur = 8; mctx.shadowColor = 'rgba(255,90,0,0.45)';
-  mctx.stroke(); mctx.shadowBlur = 0;
-  mctx.lineTo(w,h); mctx.lineTo(0,h); mctx.closePath();
-  const g = mctx.createLinearGradient(0,0,0,h);
-  g.addColorStop(0,'rgba(255,90,0,0.15)'); g.addColorStop(1,'transparent');
-  mctx.fillStyle = g; mctx.fill();
-}
-function tickChart() {
-  prices.push(prices[prices.length-1] + (Math.random()-0.48)*0.001);
-  if (prices.length > 55) prices.shift();
-  rsi = Math.max(22, Math.min(78, rsi + (Math.random()-0.5)*3.5));
-  prob = Math.max(0.32, Math.min(0.72, prob + (Math.random()-0.5)*0.035));
-  signal = prob <= 0.45 ? 'PUT' : prob >= 0.52 ? 'CALL' : 'SKIP';
-  document.getElementById('mRsi').textContent = rsi.toFixed(1);
-  document.getElementById('mProb').textContent = prob.toFixed(3);
-  const s = document.getElementById('mSignal');
-  s.textContent = signal;
-  s.style.color = signal==='CALL' ? '#3ddc84' : signal==='PUT' ? '#ff5a5a' : 'rgba(255,255,255,0.5)';
-  drawChart();
-}
-initChart(); drawChart();
-setInterval(tickChart, 1100);
-addEventListener('resize', () => { initChart(); drawChart(); });
-video.play().catch(()=>{});
-
-// Particles
-const canvas = document.getElementById('fx');
-const ctx = canvas.getContext('2d');
-let W, H, particles = [];
-function resize() { W = canvas.width = innerWidth; H = canvas.height = innerHeight; }
-resize(); addEventListener('resize', resize);
-class P {
-  constructor() {
-    this.x = Math.random()*W; this.y = Math.random()*H;
-    this.vx = (Math.random()-0.5)*0.4; this.vy = (Math.random()-0.5)*0.4;
-    this.size = 0.6+Math.random()*1.4;
-    this.life = 80+Math.random()*120; this.max = this.life;
-    this.color = Math.random()>0.3 ? '255,90,0' : '255,160,60';
-  }
-  update() { this.x+=this.vx; this.y+=this.vy; this.life--; if(this.x<0||this.x>W) this.vx*=-1; }
-  draw() {
-    const a = Math.max(0, this.life/this.max)*0.65;
-    ctx.beginPath(); ctx.arc(this.x,this.y,this.size,0,Math.PI*2);
-    ctx.fillStyle=`rgba(${this.color},${a})`; ctx.shadowBlur=10; ctx.shadowColor=`rgba(${this.color},0.7)`;
-    ctx.fill(); ctx.shadowBlur=0;
-  }
-}
-for(let i=0;i<40;i++) particles.push(new P());
-(function loop(){
-  ctx.clearRect(0,0,W,H);
-  particles.forEach((p,i)=>{ p.update(); p.draw(); if(p.life<=0) particles[i]=new P(); });
-  requestAnimationFrame(loop);
-})();
-
-// ==================== DASHBOARD LOGIC (100% INTACT) ====================
-const appState = {
-  sessionToken: null,
-  userData: null,
-  trades: [],
-  stats: { wins: 0, losses: 0, profit: 0 },
-  botRunning: false,
-  riesgoConfig: {
-    riesgo_porcentaje: 2.0,
-    max_perdidas_consecutivas: 3,
-    stop_loss_diario: 15,
-    take_profit_diario: 20,
-    monto_maximo: 10
-  }
-};
-
-function saveSessionToken(token) {
-  localStorage.setItem('iq_session_token', token);
-  appState.sessionToken = token;
-}
-function getSessionToken() { return localStorage.getItem('iq_session_token'); }
-function clearSessionToken() {
-  localStorage.removeItem('iq_session_token');
-  appState.sessionToken = null;
-}
-function getAuthHeaders() {
-  return {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${appState.sessionToken || getSessionToken()}`
-  };
-}
-
-function showLoginPanel() {
-  document.getElementById('landingPage').classList.remove('landing-hidden');
-  document.getElementById('dashboard').classList.add('hidden');
-  document.getElementById('loginForm').reset();
-  const connectBtn = document.getElementById('connectBtn');
-  connectBtn.disabled = false;
-  connectBtn.textContent = 'CONECTAR AL NÚCLEO';
-  const loadingText = document.getElementById('loadingText');
-  if(loadingText) loadingText.classList.add('hidden');
-}
-
-function restoreDashboard(userData) {
-  const { user, real, practice } = userData;
-  document.getElementById('userName').textContent = user.username;
-  document.getElementById('realBalance').textContent = `$${real.balance.toFixed(2)}`;
-  document.getElementById('demoBalance').textContent = `$${practice.balance.toFixed(2)}`;
-  document.getElementById('realId').textContent = real.accountId || 'N/A';
-  document.getElementById('demoId').textContent = practice.accountId || 'N/A';
-  document.getElementById('totalBalance').textContent = `$${(real.balance + practice.balance).toFixed(2)}`;
-  calcularMontoSugerido();
-  
-  document.getElementById('landingPage').classList.add('landing-hidden');
-  document.getElementById('dashboard').classList.remove('hidden');
-}
-
-async function logout() {
-  document.getElementById('serverBotStatus').style.display = 'none';
-  if (!confirm('¿Cerrar sesión y volver al terminal de acceso?')) return;
-  try {
-    await fetch('/logout', { method: 'POST', headers: getAuthHeaders() });
-  } catch (err) { console.error('Error en logout:', err); } 
-  finally {
-    clearSessionToken();
-    localStorage.removeItem('bot_config');
-    appState.userData = null;
-    appState.trades = [];
-    appState.stats = {wins: 0, losses: 0, profit: 0};
-    showLoginPanel();
-  }
-}
-
-async function login() {
-  const email = document.getElementById('emailInput').value;
-  const password = document.getElementById('passwordInput').value;
-  const connectBtn = document.getElementById('connectBtn');
-  const loadingText = document.getElementById('loadingText');
-
-  connectBtn.disabled = true;
-  connectBtn.textContent = 'CONECTANDO...';
-  if(loadingText) loadingText.classList.remove('hidden');
-
-  try {
-    const res = await fetch('/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
-    const json = await res.json();
-    if (!res.ok || !json.success) {
-      throw new Error(json.error || 'Error al iniciar sesión');
-    }
-
-    saveSessionToken(json.session_token);
-    appState.userData = json.data;
-
-    document.getElementById('userName').textContent = json.data.user.username;
-    document.getElementById('realBalance').textContent = `$${json.data.real.balance.toFixed(2)}`;
-    document.getElementById('demoBalance').textContent = `$${json.data.practice.balance.toFixed(2)}`;
-    document.getElementById('realId').textContent = json.data.real.accountId || 'N/A';
-    document.getElementById('demoId').textContent = json.data.practice.accountId || 'N/A';
-    document.getElementById('totalBalance').textContent = `$${(json.data.real.balance + json.data.practice.balance).toFixed(2)}`;
-
-    calcularMontoSugerido();
-
-    document.getElementById('landingPage').classList.add('landing-hidden');
-    document.getElementById('dashboard').classList.remove('hidden');
-    
-    setTimeout(verificarEstadoServidor, 2000);
-
-  } catch (err) {
-    alert('❌ Error: ' + err.message);
-    connectBtn.disabled = false;
-    connectBtn.textContent = 'CONECTAR AL NÚCLEO';
-    if(loadingText) loadingText.classList.add('hidden');
-  }
-}
-
-function checkSession() {
-  const token = getSessionToken();
-  if (!token) { showLoginPanel(); return; }
-  fetch('/check_session', { method: 'GET', headers: { 'Authorization': `Bearer ${token}` } })
-    .then(res => res.json())
-    .then(data => {
-      if (data.success && data.session_valid) {
-        appState.sessionToken = token;
-        appState.userData = data.user_data;
-        restoreDashboard(data.user_data);
-        setTimeout(verificarEstadoServidor, 2000);
-      } else {
-        clearSessionToken();
-        showLoginPanel();
-      }
-    })
-    .catch(err => {
-      console.error('Error verificando sesión:', err);
-      clearSessionToken();
-      showLoginPanel();
-    });
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-  const riesgoSlider = document.getElementById('riesgoPorcentaje');
-  const stopLossSlider = document.getElementById('stopLossDiario');
-  const takeProfitSlider = document.getElementById('takeProfitDiario');
-  
-  riesgoSlider.addEventListener('input', function() {
-    document.getElementById('riesgoValue').textContent = this.value + '%';
-    appState.riesgoConfig.riesgo_porcentaje = parseFloat(this.value);
-    calcularMontoSugerido();
-  });
-  stopLossSlider.addEventListener('input', function() {
-    document.getElementById('stopLossValue').textContent = this.value + '%';
-    appState.riesgoConfig.stop_loss_diario = parseInt(this.value);
-  });
-  takeProfitSlider.addEventListener('input', function() {
-    document.getElementById('takeProfitValue').textContent = this.value + '%';
-    appState.riesgoConfig.take_profit_diario = parseInt(this.value);
-  });
-  document.getElementById('maxPerdidasConsecutivas').addEventListener('input', function() {
-    appState.riesgoConfig.max_perdidas_consecutivas = parseInt(this.value);
-  });
-  document.getElementById('montoMaximo').addEventListener('input', function() {
-    appState.riesgoConfig.monto_maximo = parseInt(this.value);
-  });
-
-  calcularMontoSugerido();
-  checkSession();
-});
-
-function toggleTipoMonto() {
-  const tipo = document.getElementById('tipoMonto').value;
-  const montoFijoContainer = document.getElementById('montoFijoContainer');
-  montoFijoContainer.style.display = tipo === 'fijo' ? 'block' : 'none';
-  if (tipo === 'auto') calcularMontoSugerido();
-}
-
-function calcularMontoSugerido() {
-  if (!appState.userData) return;
-  const balance = parseFloat(document.getElementById('realBalance').textContent.replace('$', '')) ||
-                  parseFloat(document.getElementById('demoBalance').textContent.replace('$', '')) || 10000;
-  const riesgo = appState.riesgoConfig.riesgo_porcentaje;
-  const montoBase = balance * (riesgo / 100);
-  let montoFinal = montoBase;
-  if (balance < 100) montoFinal = Math.min(montoFinal, 2);
-  else if (balance < 500) montoFinal = Math.min(montoFinal, 5);
-  else montoFinal = Math.min(montoFinal, appState.riesgoConfig.monto_maximo);
-  montoFinal = Math.max(1, montoFinal);
-  
-  document.getElementById('montoSugerido').textContent = '$' + montoFinal.toFixed(2);
-  document.getElementById('riesgoActual').textContent = riesgo.toFixed(1) + '%';
-}
-
-async function operacionManual() {
-  const manualBtn = document.getElementById('manualBtn');
-  const modo = document.getElementById('accountMode').value;
-  const tipoMonto = document.getElementById('tipoMonto').value;
-  let monto = null;
-  if (tipoMonto === 'fijo') {
-    monto = parseFloat(document.getElementById('tradeAmount').value);
-    if (monto < 1) { alert('El monto mínimo es $1'); return; }
-  }
-  if (appState.botRunning) {
-    alert('⚠️ El bot automático está en ejecución. Deténlo primero.');
-    return;
-  }
-  manualBtn.disabled = true;
-  manualBtn.textContent = '⏳ EJECUTANDO...';
-  try {
-    const res = await fetch('/operar', {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify({ modo: modo, monto: monto, forzar_operacion: true, ...appState.riesgoConfig })
-    });
-    const data = await res.json();
-    if (!res.ok || !data.success) throw new Error(data.error || 'Error en la operación');
-    
-    if (data.estadisticas_riesgo) actualizarMonitorRiesgo(data.estadisticas_riesgo);
-    if (data.ejecutado) {
-      agregarTradeHistorial(data);
-      actualizarEstadisticas();
-    }
-    
-    if (data.ejecutado) {
-      if (data.resultado_trade && data.resultado_trade.finalizada) {
-        const resultado = data.resultado_trade;
-        alert(`${resultado.win ? '✅' : ''} OPERACIÓN COMPLETADA\n${resultado.win ? 'GANASTE' : 'PERDISTE'}: ${Math.abs(resultado.ganancia).toFixed(2)}\nDecisión: ${data.decision}\nMonto: $${data.monto_calculado || data.monto}`);
-      } else {
-        alert(`⏳ Operación ejecutada\nDecisión: ${data.decision}\nID: ${data.trade_id}`);
-      }
-    } else {
-      alert(`❌ No se pudo ejecutar.\nRazón: ${data.razon || 'Desconocida'}`);
-    }
-  } catch (err) {
-    alert('❌ Error: ' + err.message);
-  } finally {
-    manualBtn.disabled = false;
-    manualBtn.textContent = ' OPERACIÓN MANUAL';
-  }
-}
-
-async function iniciarBotServidor() {
-  const serverBotBtn = document.getElementById('serverBotBtn');
-  const modo = document.getElementById('accountMode').value;
-  const intervalo = parseInt(document.getElementById('intervalMinutes').value);
-  const tipoMonto = document.getElementById('tipoMonto').value;
-  let monto = null;
-  if (tipoMonto === 'fijo') {
-    monto = parseFloat(document.getElementById('tradeAmount').value);
-    if (monto < 1) { alert('El monto mínimo es $1'); return; }
-  }
-  if (!confirm(`🚀 ¿INICIAR BOT 24/7 EN SERVIDOR?\n• Modo: ${modo.toUpperCase()}\n• Intervalo: ${intervalo} minutos\n• Riesgo: ${appState.riesgoConfig.riesgo_porcentaje}%`)) return;
-
-  serverBotBtn.disabled = true;
-  serverBotBtn.textContent = '⏳ INICIANDO...';
-  try {
-    const res = await fetch('/iniciar_bot_servidor', {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify({ modo, intervalo, monto, ...appState.riesgoConfig })
-    });
-    const data = await res.json();
-    if (!res.ok || !data.success) throw new Error(data.error || 'Error al iniciar bot');
-
-    document.getElementById('serverBotStatus').style.display = 'block';
-    document.getElementById('serverInterval').textContent = intervalo;
-    document.getElementById('lastServerOperation').textContent = new Date().toLocaleTimeString();
-    alert('✅ Bot 24/7 iniciado en servidor');
-    iniciarMonitorServidor();
-  } catch (err) {
-    alert('❌ Error: ' + err.message);
-  } finally {
-    serverBotBtn.disabled = false;
-    serverBotBtn.textContent = '🚀 BOT 24/7 SERVIDOR';
-  }
-}
-
-async function detenerBotServidor() {
-  if (!confirm('¿Detener el bot 24/7 del servidor?')) return;
-  try {
-    const res = await fetch('/detener_bot_servidor', { method: 'POST', headers: getAuthHeaders() });
-    const data = await res.json();
-    if (data.success) {
-      document.getElementById('serverBotStatus').style.display = 'none';
-      alert('🛑 Bot servidor detenido');
-    } else { throw new Error(data.error); }
-  } catch (err) { alert('❌ Error: ' + err.message); }
-}
-
-function iniciarMonitorServidor() {
-  setInterval(async () => {
-    try {
-      const res = await fetch('/estado_bot_servidor', { headers: getAuthHeaders() });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.bot_activo) {
-          document.getElementById('lastServerOperation').textContent = new Date().toLocaleTimeString();
-        } else {
-          document.getElementById('serverBotStatus').style.display = 'none';
-        }
-      }
-    } catch (err) { console.log('⚠️ No se pudo verificar estado del servidor'); }
-  }, 30000);
-}
-
-async function verificarEstadoServidor() {
-  try {
-    const res = await fetch('/estado_bot_servidor', { headers: getAuthHeaders() });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.bot_activo) {
-        document.getElementById('serverBotStatus').style.display = 'block';
-        document.getElementById('serverInterval').textContent = data.intervalo || 5;
-        document.getElementById('lastServerOperation').textContent = data.ultima_operacion_timestamp ? new Date(data.ultima_operacion_timestamp).toLocaleTimeString() : '-';
-        iniciarMonitorServidor();
-      }
-    }
-  } catch (err) { console.log('ℹ️ No hay bot activo en servidor'); }
-}
-
-function actualizarMonitorRiesgo(estadisticas) {
-  document.getElementById('rachaActual').textContent = estadisticas.racha_actual;
-  const profitEl = document.getElementById('profitHoy');
-  profitEl.textContent = '$' + estadisticas.profit_diario.toFixed(2);
-  profitEl.style.color = estadisticas.profit_diario >= 0 ? 'var(--green)' : 'var(--red)';
-  const rachaEl = document.getElementById('rachaActual');
-  rachaEl.style.color = estadisticas.racha_actual >= 0 ? 'var(--green)' : 'var(--red)';
-}
-
-async function resetRiesgo() {
-  try {
-    const res = await fetch('/reset_riesgo', { method: 'POST', headers: getAuthHeaders() });
-    const data = await res.json();
-    if (data.success) {
-      document.getElementById('rachaActual').textContent = '0';
-      document.getElementById('profitHoy').textContent = '$0.00';
-      document.getElementById('rachaActual').style.color = 'var(--green)';
-      document.getElementById('profitHoy').style.color = 'var(--green)';
-      alert('✅ Estadísticas de riesgo reseteadas');
-    } else { throw new Error(data.error); }
-  } catch (err) { alert('❌ Error reseteando riesgo: ' + err.message); }
-}
-
-async function forceLogout() {
-  const email = document.getElementById('emailInput').value.trim();
-  if (!email) { alert('️ Ingresa tu email primero'); return; }
-  if (!confirm(`¿Forzar cierre de sesión para ${email} en TODOS los dispositivos?`)) return;
-  
-  const connectBtn = document.getElementById('connectBtn');
-  const loadingText = document.getElementById('loadingText');
-  connectBtn.disabled = true;
-  connectBtn.textContent = 'CERRANDO SESIONES...';
-  if(loadingText) loadingText.classList.remove('hidden');
-
-  try {
-    const res = await fetch('/force_logout', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ email })
-    });
-    const data = await res.json();
-    if (data.success) {
-      alert('✅ ' + data.message + '\nAhora puedes iniciar sesión normalmente.');
-    } else { throw new Error(data.error); }
-  } catch (err) { alert('❌ Error: ' + err.message); } 
-  finally {
-    connectBtn.disabled = false;
-    connectBtn.textContent = 'CONECTAR AL NÚCLEO';
-    if(loadingText) loadingText.classList.add('hidden');
-  }
-}
-
-function agregarTradeHistorial(data) {
-  if (!data.ejecutado || data.decision === 'SKIP') return;
-  const trade = {
-    id: Date.now(),
-    timestamp: new Date().toLocaleString(),
-    decision: data.decision,
-    probabilidad: data.probabilidad,
-    modo: data.modo,
-    ejecutado: data.ejecutado,
-    trade_id: data.trade_id,
-    resultado: data.resultado_trade,
-    monto: data.monto_calculado || parseFloat(document.getElementById('tradeAmount').value)
-  };
-  appState.trades.unshift(trade);
-  if (appState.trades.length > 50) appState.trades = appState.trades.slice(0, 50);
-  renderHistorial();
-}
-
-function renderHistorial() {
-  const list = document.getElementById('tradeList');
-  const operacionesEjecutadas = appState.trades.filter(trade => trade.ejecutado && trade.trade_id);
-  if (operacionesEjecutadas.length === 0) {
-    list.innerHTML = '<div class="empty-history">No hay operaciones ejecutadas</div>';
-    return;
-  }
-  list.innerHTML = operacionesEjecutadas.map(trade => {
-    let resultHTML = '', resultClass = 'pending';
-    if (trade.resultado) {
-      if (trade.resultado.finalizada) {
-        resultClass = trade.resultado.win ? 'win' : 'loss';
-        const signo = trade.resultado.ganancia >= 0 ? '+' : '';
-        resultHTML = `<div class="trade-result ${resultClass}">${trade.resultado.win ? '✅ WIN' : '❌ LOSS'}: ${signo}${trade.resultado.ganancia.toFixed(2)}</div>`;
-      } else {
-        resultHTML = '<div class="trade-result pending">⏳ Pendiente</div>';
-      }
-    } else {
-      resultHTML = '<div class="trade-result pending">⏳ Esperando resultado</div>';
-    }
-    return `
-      <div class="trade-item">
-        <div class="trade-header">
-          <span class="trade-type ${trade.decision.toLowerCase()}">${trade.decision}</span>
-          <span class="trade-time">${trade.timestamp}</span>
-        </div>
-        <div class="trade-info">
-          Modo: ${trade.modo.toUpperCase()} | Prob: ${trade.probabilidad} | Monto: $${trade.monto}
-        </div>
-        <div class="trade-id">ID: ${trade.trade_id}</div>
-        <div class="trade-details">${resultHTML}</div>
-      </div>`;
-  }).join('');
-}
-
-function actualizarEstadisticas() {
-  let wins = 0, losses = 0, profit = 0;
-  const operacionesConResultado = appState.trades.filter(trade => trade.ejecutado && trade.resultado && trade.resultado.finalizada);
-  operacionesConResultado.forEach(trade => {
-    if (trade.resultado.win) wins++; else losses++;
-    profit += trade.resultado.ganancia;
-  });
-  appState.stats = { wins, losses, profit };
-  document.getElementById('tradesCount').textContent = operacionesConResultado.length;
-  const profitEl = document.getElementById('profitLoss');
-  profitEl.textContent = `$${profit.toFixed(2)}`;
-  profitEl.className = 'stat-value ' + (profit >= 0 ? 'positive' : 'negative');
-  const total = wins + losses;
-  const winRate = total > 0 ? ((wins / total) * 100).toFixed(1) : 0;
-  document.getElementById('winRate').textContent = `${winRate}%`;
-}
-
-function clearHistory() {
-  if (confirm('¿Seguro que quieres limpiar el historial?')) {
-    appState.trades = [];
-    appState.stats = { wins: 0, losses: 0, profit: 0 };
-    renderHistorial();
-    actualizarEstadisticas();
-  }
-}
-
-window.addEventListener('beforeunload', (e) => {
-  if (appState.botRunning) {
-    e.preventDefault();
-    e.returnValue = '¿Estás seguro? El bot automático se detendrá.';
-  }
-});
-</script>
+ -> <script>
+ ->  -> // ==================== LANDING PAGE ANIMATIONS & AUDIO ====================
+ ->  -> const chapters = [...document.querySelectorAll('.chapter')];
+ ->  -> const nav = document.getElementById('chapterNav');
+ ->  -> chapters.forEach((ch, i) => {
+ ->  ->   const btn = document.createElement('button');
+ ->  ->   btn.setAttribute('aria-label', 'Capítulo ' + i);
+ ->  ->   btn.onclick = () => ch.scrollIntoView({ behavior: 'smooth' });
+ ->  ->   nav.appendChild(btn);
+ ->  -> });
+ ->  -> const navBtns = [...nav.querySelectorAll('button')];
+ ->  -> 
+ ->  -> const video = document.getElementById('bgVideo');
+ ->  -> const vignette = document.getElementById('vignette');
+ ->  -> const progress = document.getElementById('progress');
+ ->  -> let currentChapter = 0;
+ ->  -> let ticking = false;
+ ->  -> 
+ ->  -> function updateStory() {
+ ->  ->   const scrollY = window.scrollY;
+ ->  ->   const docH = document.documentElement.scrollHeight - window.innerHeight;
+ ->  ->   progress.style.width = (docH > 0 ? (scrollY / docH) * 100 : 0) + '%';
+ ->  ->   let active = 0;
+ ->  ->   let best = Infinity;
+ ->  ->   chapters.forEach((ch, i) => {
+ ->  ->     const rect = ch.getBoundingClientRect();
+ ->  ->     const mid = Math.abs(rect.top + rect.height / 2 - window.innerHeight / 2);
+ ->  ->     if (mid < best) { best = mid; active = i; }
+ ->  ->     const visible = rect.top < window.innerHeight * 0.65 && rect.bottom > window.innerHeight * 0.25;
+ ->  ->     ch.classList.toggle('in-view', visible);
+ ->  ->   });
+ ->  ->   if (active !== currentChapter) {
+ ->  ->     currentChapter = active;
+ ->  ->     navBtns.forEach((b, i) => b.classList.toggle('active', i === active));
+ ->  ->   }
+ ->  ->   const ch = chapters[active];
+ ->  ->   const bright = parseFloat(ch.dataset.videoBright || 0.85);
+ ->  ->   const yShift = parseFloat(ch.dataset.videoY || 0);
+ ->  ->   video.style.filter = `contrast(1.1) brightness(${bright}) saturate(1.1)`;
+ ->  ->   video.style.transform = `scale(1.08) translate3d(0, ${yShift}px, 0)`;
+ ->  ->   vignette.style.opacity = String(0.7 + (1 - bright) * 0.5);
+ ->  ->   ticking = false;
+ ->  -> }
+ ->  -> function onScroll() {
+ ->  ->   if (!ticking) { requestAnimationFrame(updateStory); ticking = true; }
+ ->  -> }
+ ->  -> window.addEventListener('scroll', onScroll, { passive: true });
+ ->  -> window.addEventListener('resize', onScroll, { passive: true });
+ ->  -> chapters[0].classList.add('in-view');
+ ->  -> navBtns[0].classList.add('active');
+ ->  -> updateStory();
+ ->  -> 
+ ->  -> document.getElementById('ctaTop').addEventListener('click', (e) => {
+ ->  ->   e.preventDefault();
+ ->  ->   document.getElementById('acceso').scrollIntoView({ behavior: 'smooth' });
+ ->  -> });
+ ->  -> 
+ ->  -> // Audio
+ ->  -> const AMBIENT_URL = 'ambient.mp3';
+ ->  -> let audioCtx = null, masterGain = null, ambientEl = null, isSoundOn = false;
+ ->  -> function ensureAudioCtx() {
+ ->  ->   if (audioCtx) return;
+ ->  ->   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+ ->  ->   masterGain = audioCtx.createGain();
+ ->  ->   masterGain.gain.value = 0.85;
+ ->  ->   masterGain.connect(audioCtx.destination);
+ ->  -> }
+ ->  -> function startAmbient() {
+ ->  ->   ensureAudioCtx();
+ ->  ->   if (audioCtx.state === 'suspended') audioCtx.resume();
+ ->  ->   if (!ambientEl) {
+ ->  ->     ambientEl = new Audio(AMBIENT_URL);
+ ->  ->     ambientEl.loop = true; ambientEl.preload = 'auto'; ambientEl.volume = 0.45;
+ ->  ->   }
+ ->  ->   ambientEl.play().catch(() => {});
+ ->  ->   isSoundOn = true;
+ ->  ->   const btn = document.getElementById('soundBtn');
+ ->  ->   btn.textContent = '🔊 SONIDO ON'; btn.classList.add('active');
+ ->  -> }
+ ->  -> function stopAmbient() {
+ ->  ->   if (ambientEl) { ambientEl.pause(); ambientEl.currentTime = 0; }
+ ->  ->   isSoundOn = false;
+ ->  ->   const btn = document.getElementById('soundBtn');
+ ->  ->   btn.textContent = '🔊 ACTIVAR SONIDO'; btn.classList.remove('active');
+ ->  -> }
+ ->  -> document.getElementById('soundBtn').onclick = () => { if (!isSoundOn) startAmbient(); else stopAmbient(); };
+ ->  -> 
+ ->  -> document.getElementById('toggleKey').onclick = () => {
+ ->  ->   const inp = document.getElementById('passwordInput');
+ ->  ->   const is = inp.type === 'password';
+ ->  ->   inp.type = is ? 'text' : 'password';
+ ->  ->   document.getElementById('toggleKey').textContent = is ? '🔒' : '👁';
+ ->  -> };
+ ->  -> 
+ ->  -> // Mini Chart
+ ->  -> const mc = document.getElementById('miniChart');
+ ->  -> const mctx = mc.getContext('2d');
+ ->  -> let prices = [], rsi = 52, prob = 0.5, signal = 'SKIP';
+ ->  -> function initChart() {
+ ->  ->   const dpr = devicePixelRatio || 1;
+ ->  ->   mc.width = mc.offsetWidth * dpr; mc.height = 110 * dpr;
+ ->  ->   mctx.setTransform(dpr,0,0,dpr,0,0);
+ ->  ->   prices = []; let p = 1.085;
+ ->  ->   for (let i=0;i<55;i++){ p += (Math.random()-0.48)*0.001; prices.push(p); }
+ ->  -> }
+ ->  -> function drawChart() {
+ ->  ->   const w = mc.offsetWidth, h = 110;
+ ->  ->   mctx.clearRect(0,0,w,h);
+ ->  ->   const min = Math.min(...prices), max = Math.max(...prices);
+ ->  ->   const range = max-min || 0.001;
+ ->  ->   mctx.beginPath();
+ ->  ->   prices.forEach((p,i)=>{
+ ->  ->     const x = (i/(prices.length-1))*w;
+ ->  ->     const y = h - ((p-min)/range)*(h-14) - 7;
+ ->  ->     i? mctx.lineTo(x,y) : mctx.moveTo(x,y);
+ ->  ->   });
+ ->  ->   mctx.strokeStyle = 'rgba(255,90,0,0.85)'; mctx.lineWidth = 1.7;
+ ->  ->   mctx.shadowBlur = 8; mctx.shadowColor = 'rgba(255,90,0,0.45)';
+ ->  ->   mctx.stroke(); mctx.shadowBlur = 0;
+ ->  ->   mctx.lineTo(w,h); mctx.lineTo(0,h); mctx.closePath();
+ ->  ->   const g = mctx.createLinearGradient(0,0,0,h);
+ ->  ->   g.addColorStop(0,'rgba(255,90,0,0.15)'); g.addColorStop(1,'transparent');
+ ->  ->   mctx.fillStyle = g; mctx.fill();
+ ->  -> }
+ ->  -> function tickChart() {
+ ->  ->   prices.push(prices[prices.length-1] + (Math.random()-0.48)*0.001);
+ ->  ->   if (prices.length > 55) prices.shift();
+ ->  ->   rsi = Math.max(22, Math.min(78, rsi + (Math.random()-0.5)*3.5));
+ ->  ->   prob = Math.max(0.32, Math.min(0.72, prob + (Math.random()-0.5)*0.035));
+ ->  ->   signal = prob <= 0.45 ? 'PUT' : prob >= 0.52 ? 'CALL' : 'SKIP';
+ ->  ->   document.getElementById('mRsi').textContent = rsi.toFixed(1);
+ ->  ->   document.getElementById('mProb').textContent = prob.toFixed(3);
+ ->  ->   const s = document.getElementById('mSignal');
+ ->  ->   s.textContent = signal;
+ ->  ->   s.style.color = signal==='CALL' ? '#3ddc84' : signal==='PUT' ? '#ff5a5a' : 'rgba(255,255,255,0.5)';
+ ->  ->   drawChart();
+ ->  -> }
+ ->  -> initChart(); drawChart();
+ ->  -> setInterval(tickChart, 1100);
+ ->  -> addEventListener('resize', () => { initChart(); drawChart(); });
+ ->  -> video.play().catch(()=>{});
+ ->  -> // Reintento por si Drive tarda en responder
+ ->  -> video.addEventListener('loadeddata', () => video.play().catch(()=>{}), { once: true });
+ ->  -> setTimeout(() => video.play().catch(()=>{}), 1500);
+ ->  -> 
+ ->  -> // Particles
+ ->  -> const canvas = document.getElementById('fx');
+ ->  -> const ctx = canvas.getContext('2d');
+ ->  -> let W, H, particles = [];
+ ->  -> function resize() { W = canvas.width = innerWidth; H = canvas.height = innerHeight; }
+ ->  -> resize(); addEventListener('resize', resize);
+ ->  -> class P {
+ ->  ->   constructor() {
+ ->  ->     this.x = Math.random()*W; this.y = Math.random()*H;
+ ->  ->     this.vx = (Math.random()-0.5)*0.4; this.vy = (Math.random()-0.5)*0.4;
+ ->  ->     this.size = 0.6+Math.random()*1.4;
+ ->  ->     this.life = 80+Math.random()*120; this.max = this.life;
+ ->  ->     this.color = Math.random()>0.3 ? '255,90,0' : '255,160,60';
+ ->  ->   }
+ ->  ->   update() { this.x+=this.vx; this.y+=this.vy; this.life--; if(this.x<0||this.x>W) this.vx*=-1; }
+ ->  ->   draw() {
+ ->  ->     const a = Math.max(0, this.life/this.max)*0.65;
+ ->  ->     ctx.beginPath(); ctx.arc(this.x,this.y,this.size,0,Math.PI*2);
+ ->  ->     ctx.fillStyle=`rgba(${this.color},${a})`; ctx.shadowBlur=10; ctx.shadowColor=`rgba(${this.color},0.7)`;
+ ->  ->     ctx.fill(); ctx.shadowBlur=0;
+ ->  ->   }
+ ->  -> }
+ ->  -> for(let i=0;i<40;i++) particles.push(new P());
+ ->  -> (function loop(){
+ ->  ->   ctx.clearRect(0,0,W,H);
+ ->  ->   particles.forEach((p,i)=>{ p.update(); p.draw(); if(p.life<=0) particles[i]=new P(); });
+ ->  ->   requestAnimationFrame(loop);
+ ->  -> })();
+ ->  -> 
+ ->  -> // ==================== DASHBOARD LOGIC (100% INTACT) ====================
+ ->  -> const appState = {
+ ->  ->   sessionToken: null,
+ ->  ->   userData: null,
+ ->  ->   trades: [],
+ ->  ->   stats: { wins: 0, losses: 0, profit: 0 },
+ ->  ->   botRunning: false,
+ ->  ->   riesgoConfig: {
+ ->  ->     riesgo_porcentaje: 2.0,
+ ->  ->     max_perdidas_consecutivas: 3,
+ ->  ->     stop_loss_diario: 15,
+ ->  ->     take_profit_diario: 20,
+ ->  ->     monto_maximo: 10
+ ->  ->   }
+ ->  -> };
+ ->  -> 
+ ->  -> function saveSessionToken(token) {
+ ->  ->   localStorage.setItem('iq_session_token', token);
+ ->  ->   appState.sessionToken = token;
+ ->  -> }
+ ->  -> function getSessionToken() { return localStorage.getItem('iq_session_token'); }
+ ->  -> function clearSessionToken() {
+ ->  ->   localStorage.removeItem('iq_session_token');
+ ->  ->   appState.sessionToken = null;
+ ->  -> }
+ ->  -> function getAuthHeaders() {
+ ->  ->   return {
+ ->  ->     'Content-Type': 'application/json',
+ ->  ->     'Authorization': `Bearer ${appState.sessionToken || getSessionToken()}`
+ ->  ->   };
+ ->  -> }
+ ->  -> 
+ ->  -> function showLoginPanel() {
+ ->  ->   document.getElementById('landingPage').classList.remove('landing-hidden');
+ ->  ->   document.getElementById('dashboard').classList.add('hidden');
+ ->  ->   document.getElementById('loginForm').reset();
+ ->  ->   const connectBtn = document.getElementById('connectBtn');
+ ->  ->   connectBtn.disabled = false;
+ ->  ->   connectBtn.textContent = 'CONECTAR AL NÚCLEO';
+ ->  ->   const loadingText = document.getElementById('loadingText');
+ ->  ->   if(loadingText) loadingText.classList.add('hidden');
+ ->  -> 
+ ->  ->   // Forzar panel centrado y capítulo visible (evita que se quede corrido en móvil)
+ ->  ->   const panel = document.getElementById('panel');
+ ->  ->   if (panel) panel.style.transform = '';
+ ->  ->   const hero = document.querySelector('.chapter-hero');
+ ->  ->   if (hero) {
+ ->  ->     hero.classList.add('in-view');
+ ->  ->     // Subir al inicio del lobby
+ ->  ->     setTimeout(() => {
+ ->  ->       window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
+ ->  ->       if (panel) panel.style.transform = '';
+ ->  ->     }, 30);
+ ->  ->   }
+ ->  -> }
+ ->  -> 
+ ->  -> function restoreDashboard(userData) {
+ ->  ->   const { user, real, practice } = userData;
+ ->  ->   document.getElementById('userName').textContent = user.username;
+ ->  ->   document.getElementById('realBalance').textContent = `$${real.balance.toFixed(2)}`;
+ ->  ->   document.getElementById('demoBalance').textContent = `$${practice.balance.toFixed(2)}`;
+ ->  ->   document.getElementById('realId').textContent = real.accountId || 'N/A';
+ ->  ->   document.getElementById('demoId').textContent = practice.accountId || 'N/A';
+ ->  ->   document.getElementById('totalBalance').textContent = `$${(real.balance + practice.balance).toFixed(2)}`;
+ ->  ->   calcularMontoSugerido();
+ ->  ->   
+ ->  ->   document.getElementById('landingPage').classList.add('landing-hidden');
+ ->  ->   document.getElementById('dashboard').classList.remove('hidden');
+ ->  -> }
+ ->  -> 
+ ->  -> async function logout() {
+ ->  ->   document.getElementById('serverBotStatus').style.display = 'none';
+ ->  ->   if (!confirm('¿Cerrar sesión y volver al terminal de acceso?')) return;
+ ->  ->   try {
+ ->  ->     await fetch('/logout', { method: 'POST', headers: getAuthHeaders() });
+ ->  ->   } catch (err) { console.error('Error en logout:', err); } 
+ ->  ->   finally {
+ ->  ->     clearSessionToken();
+ ->  ->     localStorage.removeItem('bot_config');
+ ->  ->     appState.userData = null;
+ ->  ->     appState.trades = [];
+ ->  ->     appState.stats = {wins: 0, losses: 0, profit: 0};
+ ->  ->     showLoginPanel();
+ ->  ->   }
+ ->  -> }
+ ->  -> 
+ ->  -> async function login() {
+ ->  ->   const email = document.getElementById('emailInput').value;
+ ->  ->   const password = document.getElementById('passwordInput').value;
+ ->  ->   const connectBtn = document.getElementById('connectBtn');
+ ->  ->   const loadingText = document.getElementById('loadingText');
+ ->  -> 
+ ->  ->   connectBtn.disabled = true;
+ ->  ->   connectBtn.textContent = 'CONECTANDO...';
+ ->  ->   if(loadingText) loadingText.classList.remove('hidden');
+ ->  -> 
+ ->  ->   try {
+ ->  ->     const res = await fetch('/login', {
+ ->  ->       method: 'POST',
+ ->  ->       headers: { 'Content-Type': 'application/json' },
+ ->  ->       body: JSON.stringify({ email, password })
+ ->  ->     });
+ ->  ->     const json = await res.json();
+ ->  ->     if (!res.ok || !json.success) {
+ ->  ->       throw new Error(json.error || 'Error al iniciar sesión');
+ ->  ->     }
+ ->  -> 
+ ->  ->     saveSessionToken(json.session_token);
+ ->  ->     appState.userData = json.data;
+ ->  -> 
+ ->  ->     document.getElementById('userName').textContent = json.data.user.username;
+ ->  ->     document.getElementById('realBalance').textContent = `$${json.data.real.balance.toFixed(2)}`;
+ ->  ->     document.getElementById('demoBalance').textContent = `$${json.data.practice.balance.toFixed(2)}`;
+ ->  ->     document.getElementById('realId').textContent = json.data.real.accountId || 'N/A';
+ ->  ->     document.getElementById('demoId').textContent = json.data.practice.accountId || 'N/A';
+ ->  ->     document.getElementById('totalBalance').textContent = `$${(json.data.real.balance + json.data.practice.balance).toFixed(2)}`;
+ ->  -> 
+ ->  ->     calcularMontoSugerido();
+ ->  -> 
+ ->  ->     document.getElementById('landingPage').classList.add('landing-hidden');
+ ->  ->     document.getElementById('dashboard').classList.remove('hidden');
+ ->  ->     
+ ->  ->     setTimeout(verificarEstadoServidor, 2000);
+ ->  -> 
+ ->  ->   } catch (err) {
+ ->  ->     alert('❌ Error: ' + err.message);
+ ->  ->     connectBtn.disabled = false;
+ ->  ->     connectBtn.textContent = 'CONECTAR AL NÚCLEO';
+ ->  ->     if(loadingText) loadingText.classList.add('hidden');
+ ->  ->   }
+ ->  -> }
+ ->  -> 
+ ->  -> function checkSession() {
+ ->  ->   const token = getSessionToken();
+ ->  ->   if (!token) { showLoginPanel(); return; }
+ ->  ->   fetch('/check_session', { method: 'GET', headers: { 'Authorization': `Bearer ${token}` } })
+ ->  ->     .then(res => res.json())
+ ->  ->     .then(data => {
+ ->  ->       if (data.success && data.session_valid) {
+ ->  ->         appState.sessionToken = token;
+ ->  ->         appState.userData = data.user_data;
+ ->  ->         restoreDashboard(data.user_data);
+ ->  ->         setTimeout(verificarEstadoServidor, 2000);
+ ->  ->       } else {
+ ->  ->         clearSessionToken();
+ ->  ->         showLoginPanel();
+ ->  ->       }
+ ->  ->     })
+ ->  ->     .catch(err => {
+ ->  ->       console.error('Error verificando sesión:', err);
+ ->  ->       clearSessionToken();
+ ->  ->       showLoginPanel();
+ ->  ->     });
+ ->  -> }
+ ->  -> 
+ ->  -> document.addEventListener('DOMContentLoaded', function() {
+ ->  ->   const riesgoSlider = document.getElementById('riesgoPorcentaje');
+ ->  ->   const stopLossSlider = document.getElementById('stopLossDiario');
+ ->  ->   const takeProfitSlider = document.getElementById('takeProfitDiario');
+ ->  ->   
+ ->  ->   riesgoSlider.addEventListener('input', function() {
+ ->  ->     document.getElementById('riesgoValue').textContent = this.value + '%';
+ ->  ->     appState.riesgoConfig.riesgo_porcentaje = parseFloat(this.value);
+ ->  ->     calcularMontoSugerido();
+ ->  ->   });
+ ->  ->   stopLossSlider.addEventListener('input', function() {
+ ->  ->     document.getElementById('stopLossValue').textContent = this.value + '%';
+ ->  ->     appState.riesgoConfig.stop_loss_diario = parseInt(this.value);
+ ->  ->   });
+ ->  ->   takeProfitSlider.addEventListener('input', function() {
+ ->  ->     document.getElementById('takeProfitValue').textContent = this.value + '%';
+ ->  ->     appState.riesgoConfig.take_profit_diario = parseInt(this.value);
+ ->  ->   });
+ ->  ->   document.getElementById('maxPerdidasConsecutivas').addEventListener('input', function() {
+ ->  ->     appState.riesgoConfig.max_perdidas_consecutivas = parseInt(this.value);
+ ->  ->   });
+ ->  ->   document.getElementById('montoMaximo').addEventListener('input', function() {
+ ->  ->     appState.riesgoConfig.monto_maximo = parseInt(this.value);
+ ->  ->   });
+ ->  -> 
+ ->  ->   calcularMontoSugerido();
+ ->  ->   checkSession();
+ ->  -> });
+ ->  -> 
+ ->  -> function toggleTipoMonto() {
+ ->  ->   const tipo = document.getElementById('tipoMonto').value;
+ ->  ->   const montoFijoContainer = document.getElementById('montoFijoContainer');
+ ->  ->   montoFijoContainer.style.display = tipo === 'fijo' ? 'block' : 'none';
+ ->  ->   if (tipo === 'auto') calcularMontoSugerido();
+ ->  -> }
+ ->  -> 
+ ->  -> function calcularMontoSugerido() {
+ ->  ->   if (!appState.userData) return;
+ ->  ->   const balance = parseFloat(document.getElementById('realBalance').textContent.replace('$', '')) ||
+ ->  ->                   parseFloat(document.getElementById('demoBalance').textContent.replace('$', '')) || 10000;
+ ->  ->   const riesgo = appState.riesgoConfig.riesgo_porcentaje;
+ ->  ->   const montoBase = balance * (riesgo / 100);
+ ->  ->   let montoFinal = montoBase;
+ ->  ->   if (balance < 100) montoFinal = Math.min(montoFinal, 2);
+ ->  ->   else if (balance < 500) montoFinal = Math.min(montoFinal, 5);
+ ->  ->   else montoFinal = Math.min(montoFinal, appState.riesgoConfig.monto_maximo);
+ ->  ->   montoFinal = Math.max(1, montoFinal);
+ ->  ->   
+ ->  ->   document.getElementById('montoSugerido').textContent = '$' + montoFinal.toFixed(2);
+ ->  ->   document.getElementById('riesgoActual').textContent = riesgo.toFixed(1) + '%';
+ ->  -> }
+ ->  -> 
+ ->  -> async function operacionManual() {
+ ->  ->   const manualBtn = document.getElementById('manualBtn');
+ ->  ->   const modo = document.getElementById('accountMode').value;
+ ->  ->   const tipoMonto = document.getElementById('tipoMonto').value;
+ ->  ->   let monto = null;
+ ->  ->   if (tipoMonto === 'fijo') {
+ ->  ->     monto = parseFloat(document.getElementById('tradeAmount').value);
+ ->  ->     if (monto < 1) { alert('El monto mínimo es $1'); return; }
+ ->  ->   }
+ ->  ->   if (appState.botRunning) {
+ ->  ->     alert('⚠️ El bot automático está en ejecución. Deténlo primero.');
+ ->  ->     return;
+ ->  ->   }
+ ->  ->   manualBtn.disabled = true;
+ ->  ->   manualBtn.textContent = '⏳ EJECUTANDO...';
+ ->  ->   try {
+ ->  ->     const res = await fetch('/operar', {
+ ->  ->       method: 'POST',
+ ->  ->       headers: getAuthHeaders(),
+ ->  ->       body: JSON.stringify({ modo: modo, monto: monto, forzar_operacion: true, ...appState.riesgoConfig })
+ ->  ->     });
+ ->  ->     const data = await res.json();
+ ->  ->     if (!res.ok || !data.success) throw new Error(data.error || 'Error en la operación');
+ ->  ->     
+ ->  ->     if (data.estadisticas_riesgo) actualizarMonitorRiesgo(data.estadisticas_riesgo);
+ ->  ->     if (data.ejecutado) {
+ ->  ->       agregarTradeHistorial(data);
+ ->  ->       actualizarEstadisticas();
+ ->  ->     }
+ ->  ->     
+ ->  ->     if (data.ejecutado) {
+ ->  ->       if (data.resultado_trade && data.resultado_trade.finalizada) {
+ ->  ->         const resultado = data.resultado_trade;
+ ->  ->         alert(`${resultado.win ? '✅' : ''} OPERACIÓN COMPLETADA\n${resultado.win ? 'GANASTE' : 'PERDISTE'}: ${Math.abs(resultado.ganancia).toFixed(2)}\nDecisión: ${data.decision}\nMonto: $${data.monto_calculado || data.monto}`);
+ ->  ->       } else {
+ ->  ->         alert(`⏳ Operación ejecutada\nDecisión: ${data.decision}\nID: ${data.trade_id}`);
+ ->  ->       }
+ ->  ->     } else {
+ ->  ->       alert(`❌ No se pudo ejecutar.\nRazón: ${data.razon || 'Desconocida'}`);
+ ->  ->     }
+ ->  ->   } catch (err) {
+ ->  ->     alert('❌ Error: ' + err.message);
+ ->  ->   } finally {
+ ->  ->     manualBtn.disabled = false;
+ ->  ->     manualBtn.textContent = ' OPERACIÓN MANUAL';
+ ->  ->   }
+ ->  -> }
+ ->  -> 
+ ->  -> async function iniciarBotServidor() {
+ ->  ->   const serverBotBtn = document.getElementById('serverBotBtn');
+ ->  ->   const modo = document.getElementById('accountMode').value;
+ ->  ->   const intervalo = parseInt(document.getElementById('intervalMinutes').value);
+ ->  ->   const tipoMonto = document.getElementById('tipoMonto').value;
+ ->  ->   let monto = null;
+ ->  ->   if (tipoMonto === 'fijo') {
+ ->  ->     monto = parseFloat(document.getElementById('tradeAmount').value);
+ ->  ->     if (monto < 1) { alert('El monto mínimo es $1'); return; }
+ ->  ->   }
+ ->  ->   if (!confirm(`🚀 ¿INICIAR BOT 24/7 EN SERVIDOR?\n• Modo: ${modo.toUpperCase()}\n• Intervalo: ${intervalo} minutos\n• Riesgo: ${appState.riesgoConfig.riesgo_porcentaje}%`)) return;
+ ->  -> 
+ ->  ->   serverBotBtn.disabled = true;
+ ->  ->   serverBotBtn.textContent = '⏳ INICIANDO...';
+ ->  ->   try {
+ ->  ->     const res = await fetch('/iniciar_bot_servidor', {
+ ->  ->       method: 'POST',
+ ->  ->       headers: getAuthHeaders(),
+ ->  ->       body: JSON.stringify({ modo, intervalo, monto, ...appState.riesgoConfig })
+ ->  ->     });
+ ->  ->     const data = await res.json();
+ ->  ->     if (!res.ok || !data.success) throw new Error(data.error || 'Error al iniciar bot');
+ ->  -> 
+ ->  ->     document.getElementById('serverBotStatus').style.display = 'block';
+ ->  ->     document.getElementById('serverInterval').textContent = intervalo;
+ ->  ->     document.getElementById('lastServerOperation').textContent = new Date().toLocaleTimeString();
+ ->  ->     alert('✅ Bot 24/7 iniciado en servidor');
+ ->  ->     iniciarMonitorServidor();
+ ->  ->   } catch (err) {
+ ->  ->     alert('❌ Error: ' + err.message);
+ ->  ->   } finally {
+ ->  ->     serverBotBtn.disabled = false;
+ ->  ->     serverBotBtn.textContent = '🚀 BOT 24/7 SERVIDOR';
+ ->  ->   }
+ ->  -> }
+ ->  -> 
+ ->  -> async function detenerBotServidor() {
+ ->  ->   if (!confirm('¿Detener el bot 24/7 del servidor?')) return;
+ ->  ->   try {
+ ->  ->     const res = await fetch('/detener_bot_servidor', { method: 'POST', headers: getAuthHeaders() });
+ ->  ->     const data = await res.json();
+ ->  ->     if (data.success) {
+ ->  ->       document.getElementById('serverBotStatus').style.display = 'none';
+ ->  ->       alert('🛑 Bot servidor detenido');
+ ->  ->     } else { throw new Error(data.error); }
+ ->  ->   } catch (err) { alert('❌ Error: ' + err.message); }
+ ->  -> }
+ ->  -> 
+ ->  -> function iniciarMonitorServidor() {
+ ->  ->   setInterval(async () => {
+ ->  ->     try {
+ ->  ->       const res = await fetch('/estado_bot_servidor', { headers: getAuthHeaders() });
+ ->  ->       if (res.ok) {
+ ->  ->         const data = await res.json();
+ ->  ->         if (data.bot_activo) {
+ ->  ->           document.getElementById('lastServerOperation').textContent = new Date().toLocaleTimeString();
+ ->  ->         } else {
+ ->  ->           document.getElementById('serverBotStatus').style.display = 'none';
+ ->  ->         }
+ ->  ->       }
+ ->  ->     } catch (err) { console.log('⚠️ No se pudo verificar estado del servidor'); }
+ ->  ->   }, 30000);
+ ->  -> }
+ ->  -> 
+ ->  -> async function verificarEstadoServidor() {
+ ->  ->   try {
+ ->  ->     const res = await fetch('/estado_bot_servidor', { headers: getAuthHeaders() });
+ ->  ->     if (res.ok) {
+ ->  ->       const data = await res.json();
+ ->  ->       if (data.bot_activo) {
+ ->  ->         document.getElementById('serverBotStatus').style.display = 'block';
+ ->  ->         document.getElementById('serverInterval').textContent = data.intervalo || 5;
+ ->  ->         document.getElementById('lastServerOperation').textContent = data.ultima_operacion_timestamp ? new Date(data.ultima_operacion_timestamp).toLocaleTimeString() : '-';
+ ->  ->         iniciarMonitorServidor();
+ ->  ->       }
+ ->  ->     }
+ ->  ->   } catch (err) { console.log('ℹ️ No hay bot activo en servidor'); }
+ ->  -> }
+ ->  -> 
+ ->  -> function actualizarMonitorRiesgo(estadisticas) {
+ ->  ->   document.getElementById('rachaActual').textContent = estadisticas.racha_actual;
+ ->  ->   const profitEl = document.getElementById('profitHoy');
+ ->  ->   profitEl.textContent = '$' + estadisticas.profit_diario.toFixed(2);
+ ->  ->   profitEl.style.color = estadisticas.profit_diario >= 0 ? 'var(--green)' : 'var(--red)';
+ ->  ->   const rachaEl = document.getElementById('rachaActual');
+ ->  ->   rachaEl.style.color = estadisticas.racha_actual >= 0 ? 'var(--green)' : 'var(--red)';
+ ->  -> }
+ ->  -> 
+ ->  -> async function resetRiesgo() {
+ ->  ->   try {
+ ->  ->     const res = await fetch('/reset_riesgo', { method: 'POST', headers: getAuthHeaders() });
+ ->  ->     const data = await res.json();
+ ->  ->     if (data.success) {
+ ->  ->       document.getElementById('rachaActual').textContent = '0';
+ ->  ->       document.getElementById('profitHoy').textContent = '$0.00';
+ ->  ->       document.getElementById('rachaActual').style.color = 'var(--green)';
+ ->  ->       document.getElementById('profitHoy').style.color = 'var(--green)';
+ ->  ->       alert('✅ Estadísticas de riesgo reseteadas');
+ ->  ->     } else { throw new Error(data.error); }
+ ->  ->   } catch (err) { alert('❌ Error reseteando riesgo: ' + err.message); }
+ ->  -> }
+ ->  -> 
+ ->  -> async function forceLogout() {
+ ->  ->   const email = document.getElementById('emailInput').value.trim();
+ ->  ->   if (!email) { alert('️ Ingresa tu email primero'); return; }
+ ->  ->   if (!confirm(`¿Forzar cierre de sesión para ${email} en TODOS los dispositivos?`)) return;
+ ->  ->   
+ ->  ->   const connectBtn = document.getElementById('connectBtn');
+ ->  ->   const loadingText = document.getElementById('loadingText');
+ ->  ->   connectBtn.disabled = true;
+ ->  ->   connectBtn.textContent = 'CERRANDO SESIONES...';
+ ->  ->   if(loadingText) loadingText.classList.remove('hidden');
+ ->  -> 
+ ->  ->   try {
+ ->  ->     const res = await fetch('/force_logout', {
+ ->  ->       method: 'POST',
+ ->  ->       headers: {'Content-Type': 'application/json'},
+ ->  ->       body: JSON.stringify({ email })
+ ->  ->     });
+ ->  ->     const data = await res.json();
+ ->  ->     if (data.success) {
+ ->  ->       alert('✅ ' + data.message + '\nAhora puedes iniciar sesión normalmente.');
+ ->  ->     } else { throw new Error(data.error); }
+ ->  ->   } catch (err) { alert('❌ Error: ' + err.message); } 
+ ->  ->   finally {
+ ->  ->     connectBtn.disabled = false;
+ ->  ->     connectBtn.textContent = 'CONECTAR AL NÚCLEO';
+ ->  ->     if(loadingText) loadingText.classList.add('hidden');
+ ->  ->   }
+ ->  -> }
+ ->  -> 
+ ->  -> function agregarTradeHistorial(data) {
+ ->  ->   if (!data.ejecutado || data.decision === 'SKIP') return;
+ ->  ->   const trade = {
+ ->  ->     id: Date.now(),
+ ->  ->     timestamp: new Date().toLocaleString(),
+ ->  ->     decision: data.decision,
+ ->  ->     probabilidad: data.probabilidad,
+ ->  ->     modo: data.modo,
+ ->  ->     ejecutado: data.ejecutado,
+ ->  ->     trade_id: data.trade_id,
+ ->  ->     resultado: data.resultado_trade,
+ ->  ->     monto: data.monto_calculado || parseFloat(document.getElementById('tradeAmount').value)
+ ->  ->   };
+ ->  ->   appState.trades.unshift(trade);
+ ->  ->   if (appState.trades.length > 50) appState.trades = appState.trades.slice(0, 50);
+ ->  ->   renderHistorial();
+ ->  -> }
+ ->  -> 
+ ->  -> function renderHistorial() {
+ ->  ->   const list = document.getElementById('tradeList');
+ ->  ->   const operacionesEjecutadas = appState.trades.filter(trade => trade.ejecutado && trade.trade_id);
+ ->  ->   if (operacionesEjecutadas.length === 0) {
+ ->  ->     list.innerHTML = '<div class="empty-history">No hay operaciones ejecutadas</div>';
+ ->  ->     return;
+ ->  ->   }
+ ->  ->   list.innerHTML = operacionesEjecutadas.map(trade => {
+ ->  ->     let resultHTML = '', resultClass = 'pending';
+ ->  ->     if (trade.resultado) {
+ ->  ->       if (trade.resultado.finalizada) {
+ ->  ->         resultClass = trade.resultado.win ? 'win' : 'loss';
+ ->  ->         const signo = trade.resultado.ganancia >= 0 ? '+' : '';
+ ->  ->         resultHTML = `<div class="trade-result ${resultClass}">${trade.resultado.win ? '✅ WIN' : '❌ LOSS'}: ${signo}${trade.resultado.ganancia.toFixed(2)}</div>`;
+ ->  ->       } else {
+ ->  ->         resultHTML = '<div class="trade-result pending">⏳ Pendiente</div>';
+ ->  ->       }
+ ->  ->     } else {
+ ->  ->       resultHTML = '<div class="trade-result pending">⏳ Esperando resultado</div>';
+ ->  ->     }
+ ->  ->     return `
+ ->  ->       <div class="trade-item">
+ ->  ->         <div class="trade-header">
+ ->  ->           <span class="trade-type ${trade.decision.toLowerCase()}">${trade.decision}</span>
+ ->  ->           <span class="trade-time">${trade.timestamp}</span>
+ ->  ->         </div>
+ ->  ->         <div class="trade-info">
+ ->  ->           Modo: ${trade.modo.toUpperCase()} | Prob: ${trade.probabilidad} | Monto: $${trade.monto}
+ ->  ->         </div>
+ ->  ->         <div class="trade-id">ID: ${trade.trade_id}</div>
+ ->  ->         <div class="trade-details">${resultHTML}</div>
+ ->  ->       </div>`;
+ ->  ->   }).join('');
+ ->  -> }
+ ->  -> 
+ ->  -> function actualizarEstadisticas() {
+ ->  ->   let wins = 0, losses = 0, profit = 0;
+ ->  ->   const operacionesConResultado = appState.trades.filter(trade => trade.ejecutado && trade.resultado && trade.resultado.finalizada);
+ ->  ->   operacionesConResultado.forEach(trade => {
+ ->  ->     if (trade.resultado.win) wins++; else losses++;
+ ->  ->     profit += trade.resultado.ganancia;
+ ->  ->   });
+ ->  ->   appState.stats = { wins, losses, profit };
+ ->  ->   document.getElementById('tradesCount').textContent = operacionesConResultado.length;
+ ->  ->   const profitEl = document.getElementById('profitLoss');
+ ->  ->   profitEl.textContent = `$${profit.toFixed(2)}`;
+ ->  ->   profitEl.className = 'stat-value ' + (profit >= 0 ? 'positive' : 'negative');
+ ->  ->   const total = wins + losses;
+ ->  ->   const winRate = total > 0 ? ((wins / total) * 100).toFixed(1) : 0;
+ ->  ->   document.getElementById('winRate').textContent = `${winRate}%`;
+ ->  -> }
+ ->  -> 
+ ->  -> function clearHistory() {
+ ->  ->   if (confirm('¿Seguro que quieres limpiar el historial?')) {
+ ->  ->     appState.trades = [];
+ ->  ->     appState.stats = { wins: 0, losses: 0, profit: 0 };
+ ->  ->     renderHistorial();
+ ->  ->     actualizarEstadisticas();
+ ->  ->   }
+ ->  -> }
+ ->  -> 
+ ->  -> window.addEventListener('beforeunload', (e) => {
+ ->  ->   if (appState.botRunning) {
+ ->  ->     e.preventDefault();
+ ->  ->     e.returnValue = '¿Estás seguro? El bot automático se detendrá.';
+ ->  ->   }
+ ->  -> });
+ ->  -> 
+ ->  -> // ===== FIX: evitar que el panel del lobby se quede desplazado en móvil =====
+ ->  -> (function() {
+ ->  ->   function resetLobbyTransforms() {
+ ->  ->     const panel = document.getElementById('panel');
+ ->  ->     if (panel) {
+ ->  ->       // Quitar cualquier transform inline residual y dejar que CSS decida
+ ->  ->       panel.style.transform = '';
+ ->  ->     }
+ ->  ->     document.querySelectorAll('.story-block, .stat-pill, .step').forEach(el => {
+ ->  ->       el.style.transform = '';
+ ->  ->     });
+ ->  ->   }
+ ->  ->   window.addEventListener('touchend', resetLobbyTransforms, { passive: true });
+ ->  ->   window.addEventListener('touchcancel', resetLobbyTransforms, { passive: true });
+ ->  ->   // También al volver del dashboard
+ ->  ->   const _origShow = window.showLoginPanel;
+ ->  ->   if (typeof showLoginPanel === 'function') {
+ ->  ->     const orig = showLoginPanel;
+ ->  ->     window.showLoginPanel = function() {
+ ->  ->       orig.apply(this, arguments);
+ ->  ->       setTimeout(resetLobbyTransforms, 50);
+ ->  ->       setTimeout(resetLobbyTransforms, 400);
+ ->  ->     };
+ ->  ->   }
+ ->  -> })();
+ ->  -> 
+ ->  -> 
+ ->  -> // ===== FONDO 3D ABSTRACTO (Three.js) – reacciona al scroll, no interfiere con UI =====
+ ->  -> (function() {
+ ->  ->   if (typeof THREE === 'undefined') return;
+ ->  -> 
+ ->  ->   const canvas = document.getElementById('bg3d');
+ ->  ->   if (!canvas) return;
+ ->  -> 
+ ->  ->   const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'low-power' });
+ ->  ->   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+ ->  ->   renderer.setSize(window.innerWidth, window.innerHeight);
+ ->  ->   renderer.setClearColor(0x000000, 0);
+ ->  -> 
+ ->  ->   const scene = new THREE.Scene();
+ ->  ->   const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 120);
+ ->  ->   camera.position.z = 18;
+ ->  -> 
+ ->  ->   // Neón naranja del tema
+ ->  ->   const NEON = 0xff5a00;
+ ->  ->   const NEON_SOFT = 0xff8a2b;
+ ->  -> 
+ ->  ->   // Grupo principal que se mueve con el scroll
+ ->  ->   const root = new THREE.Group();
+ ->  ->   scene.add(root);
+ ->  -> 
+ ->  ->   // --- Wireframe icosahedrons flotantes ---
+ ->  ->   const geo = new THREE.IcosahedronGeometry(1.1, 0);
+ ->  ->   const mat = new THREE.MeshBasicMaterial({ color: NEON, wireframe: true, transparent: true, opacity: 0.55 });
+ ->  ->   const shapes = [];
+ ->  ->   for (let i = 0; i < 14; i++) {
+ ->  ->     const mesh = new THREE.Mesh(geo, mat.clone());
+ ->  ->     mesh.material.opacity = 0.25 + Math.random() * 0.4;
+ ->  ->     mesh.position.set(
+ ->  ->       (Math.random() - 0.5) * 28,
+ ->  ->       (Math.random() - 0.5) * 22,
+ ->  ->       (Math.random() - 0.5) * 16 - 4
+ ->  ->     );
+ ->  ->     mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
+ ->  ->     const s = 0.4 + Math.random() * 1.6;
+ ->  ->     mesh.scale.setScalar(s);
+ ->  ->     mesh.userData = {
+ ->  ->       rotX: (Math.random() - 0.5) * 0.008,
+ ->  ->       rotY: (Math.random() - 0.5) * 0.012,
+ ->  ->       drift: (Math.random() - 0.5) * 0.004
+ ->  ->     };
+ ->  ->     root.add(mesh);
+ ->  ->     shapes.push(mesh);
+ ->  ->   }
+ ->  -> 
+ ->  ->   // --- Partículas de puntos ---
+ ->  ->   const pCount = 180;
+ ->  ->   const pGeo = new THREE.BufferGeometry();
+ ->  ->   const positions = new Float32Array(pCount * 3);
+ ->  ->   for (let i = 0; i < pCount; i++) {
+ ->  ->     positions[i * 3]     = (Math.random() - 0.5) * 40;
+ ->  ->     positions[i * 3 + 1] = (Math.random() - 0.5) * 30;
+ ->  ->     positions[i * 3 + 2] = (Math.random() - 0.5) * 20 - 2;
+ ->  ->   }
+ ->  ->   pGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+ ->  ->   const pMat = new THREE.PointsMaterial({
+ ->  ->     color: NEON_SOFT,
+ ->  ->     size: 0.08,
+ ->  ->     transparent: true,
+ ->  ->     opacity: 0.7,
+ ->  ->     sizeAttenuation: true
+ ->  ->   });
+ ->  ->   const points = new THREE.Points(pGeo, pMat);
+ ->  ->   root.add(points);
+ ->  -> 
+ ->  ->   // --- Anillos horizontales sutiles ---
+ ->  ->   for (let i = 0; i < 3; i++) {
+ ->  ->     const ringGeo = new THREE.RingGeometry(4 + i * 2.2, 4.08 + i * 2.2, 64);
+ ->  ->     const ringMat = new THREE.MeshBasicMaterial({
+ ->  ->       color: NEON,
+ ->  ->       transparent: true,
+ ->  ->       opacity: 0.12 - i * 0.025,
+ ->  ->       side: THREE.DoubleSide
+ ->  ->     });
+ ->  ->     const ring = new THREE.Mesh(ringGeo, ringMat);
+ ->  ->     ring.rotation.x = Math.PI / 2;
+ ->  ->     ring.position.y = (i - 1) * 3.5;
+ ->  ->     root.add(ring);
+ ->  ->   }
+ ->  -> 
+ ->  ->   // Scroll → movimiento 3D del fondo
+ ->  ->   let targetY = 0;
+ ->  ->   let currentY = 0;
+ ->  ->   let targetRot = 0;
+ ->  ->   let currentRot = 0;
+ ->  -> 
+ ->  ->   function onScroll() {
+ ->  ->     const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+ ->  ->     const t = window.scrollY / max; // 0 → 1
+ ->  ->     targetY = t * -8;               // sube el grupo
+ ->  ->     targetRot = t * 0.45;           // rota ligeramente
+ ->  ->   }
+ ->  ->   window.addEventListener('scroll', onScroll, { passive: true });
+ ->  ->   onScroll();
+ ->  -> 
+ ->  ->   function onResize() {
+ ->  ->     const w = window.innerWidth, h = window.innerHeight;
+ ->  ->     camera.aspect = w / h;
+ ->  ->     camera.updateProjectionMatrix();
+ ->  ->     renderer.setSize(w, h);
+ ->  ->   }
+ ->  ->   window.addEventListener('resize', onResize, { passive: true });
+ ->  -> 
+ ->  ->   // Solo animar cuando el landing está visible
+ ->  ->   let raf = null;
+ ->  ->   function animate() {
+ ->  ->     raf = requestAnimationFrame(animate);
+ ->  -> 
+ ->  ->     // Si el dashboard está abierto, no gastar GPU
+ ->  ->     const dash = document.getElementById('dashboard');
+ ->  ->     if (dash && !dash.classList.contains('hidden')) {
+ ->  ->       renderer.setClearColor(0x000000, 0);
+ ->  ->       renderer.render(scene, camera);
+ ->  ->       return;
+ ->  ->     }
+ ->  -> 
+ ->  ->     currentY += (targetY - currentY) * 0.06;
+ ->  ->     currentRot += (targetRot - currentRot) * 0.05;
+ ->  ->     root.position.y = currentY;
+ ->  ->     root.rotation.y = currentRot * 0.4;
+ ->  ->     root.rotation.x = currentRot * 0.15;
+ ->  -> 
+ ->  ->     shapes.forEach(m => {
+ ->  ->       m.rotation.x += m.userData.rotX;
+ ->  ->       m.rotation.y += m.userData.rotY;
+ ->  ->       m.position.y += m.userData.drift;
+ ->  ->     });
+ ->  ->     points.rotation.y += 0.0008;
+ ->  -> 
+ ->  ->     renderer.render(scene, camera);
+ ->  ->   }
+ ->  ->   animate();
+ ->  -> })();
+ ->  -> 
+ ->  -> 
+ ->  -> // ===== SFX TECNOLÓGICOS (teclado + scroll) =====
+ ->  -> (function() {
+ ->  ->   let actx = null;
+ ->  ->   function ctx() {
+ ->  ->     if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+ ->  ->     if (actx.state === 'suspended') actx.resume();
+ ->  ->     return actx;
+ ->  ->   }
+ ->  -> 
+ ->  ->   // Beep corto tipo terminal / tecla futurista
+ ->  ->   function playKey(freq) {
+ ->  ->     try {
+ ->  ->       const c = ctx();
+ ->  ->       const t = c.currentTime;
+ ->  ->       const o = c.createOscillator();
+ ->  ->       const g = c.createGain();
+ ->  ->       o.type = 'square';
+ ->  ->       o.frequency.setValueAtTime(freq || 420 + Math.random() * 180, t);
+ ->  ->       g.gain.setValueAtTime(0.0001, t);
+ ->  ->       g.gain.exponentialRampToValueAtTime(0.08, t + 0.008);
+ ->  ->       g.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
+ ->  ->       o.connect(g); g.connect(c.destination);
+ ->  ->       o.start(t); o.stop(t + 0.08);
+ ->  ->     } catch(e) {}
+ ->  ->   }
+ ->  -> 
+ ->  ->   // Click / blip al enfocar campos
+ ->  ->   function playFocus() {
+ ->  ->     try {
+ ->  ->       const c = ctx();
+ ->  ->       const t = c.currentTime;
+ ->  ->       const o = c.createOscillator();
+ ->  ->       const g = c.createGain();
+ ->  ->       o.type = 'sine';
+ ->  ->       o.frequency.setValueAtTime(660, t);
+ ->  ->       o.frequency.exponentialRampToValueAtTime(880, t + 0.06);
+ ->  ->       g.gain.setValueAtTime(0.0001, t);
+ ->  ->       g.gain.exponentialRampToValueAtTime(0.06, t + 0.01);
+ ->  ->       g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+ ->  ->       o.connect(g); g.connect(c.destination);
+ ->  ->       o.start(t); o.stop(t + 0.13);
+ ->  ->     } catch(e) {}
+ ->  ->   }
+ ->  -> 
+ ->  ->   // Whoosh suave al hacer scroll
+ ->  ->   let lastScrollSound = 0;
+ ->  ->   function playScrollTick() {
+ ->  ->     const now = Date.now();
+ ->  ->     if (now - lastScrollSound < 140) return; // no spamear
+ ->  ->     lastScrollSound = now;
+ ->  ->     try {
+ ->  ->       const c = ctx();
+ ->  ->       const t = c.currentTime;
+ ->  ->       const o = c.createOscillator();
+ ->  ->       const g = c.createGain();
+ ->  ->       o.type = 'triangle';
+ ->  ->       o.frequency.setValueAtTime(180 + Math.random() * 90, t);
+ ->  ->       o.frequency.exponentialRampToValueAtTime(90, t + 0.15);
+ ->  ->       g.gain.setValueAtTime(0.0001, t);
+ ->  ->       g.gain.exponentialRampToValueAtTime(0.035, t + 0.02);
+ ->  ->       g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+ ->  ->       o.connect(g); g.connect(c.destination);
+ ->  ->       o.start(t); o.stop(t + 0.2);
+ ->  ->     } catch(e) {}
+ ->  ->   }
+ ->  -> 
+ ->  ->   // Teclado en email y password
+ ->  ->   function bindTyping() {
+ ->  ->     ['emailInput', 'passwordInput'].forEach(id => {
+ ->  ->       const el = document.getElementById(id);
+ ->  ->       if (!el) return;
+ ->  ->       el.addEventListener('keydown', (e) => {
+ ->  ->         if (e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete') {
+ ->  ->           playKey(e.key === 'Backspace' ? 280 : undefined);
+ ->  ->         }
+ ->  ->       });
+ ->  ->       el.addEventListener('focus', playFocus);
+ ->  ->     });
+ ->  ->   }
+ ->  -> 
+ ->  ->   // Scroll / deslizar
+ ->  ->   let scrollTicking = false;
+ ->  ->   window.addEventListener('scroll', () => {
+ ->  ->     if (scrollTicking) return;
+ ->  ->     scrollTicking = true;
+ ->  ->     requestAnimationFrame(() => {
+ ->  ->       playScrollTick();
+ ->  ->       scrollTicking = false;
+ ->  ->     });
+ ->  ->   }, { passive: true });
+ ->  -> 
+ ->  ->   // También en touch move vertical (móvil)
+ ->  ->   let lastTY = null;
+ ->  ->   window.addEventListener('touchmove', (e) => {
+ ->  ->     if (!e.touches[0]) return;
+ ->  ->     const y = e.touches[0].clientY;
+ ->  ->     if (lastTY !== null && Math.abs(y - lastTY) > 18) {
+ ->  ->       playScrollTick();
+ ->  ->       lastTY = y;
+ ->  ->     } else if (lastTY === null) lastTY = y;
+ ->  ->   }, { passive: true });
+ ->  ->   window.addEventListener('touchend', () => { lastTY = null; }, { passive: true });
+ ->  -> 
+ ->  ->   if (document.readyState === 'loading') {
+ ->  ->     document.addEventListener('DOMContentLoaded', bindTyping);
+ ->  ->   } else {
+ ->  ->     bindTyping();
+ ->  ->   }
+ ->  -> })();
+ ->  -> 
+ ->  -> 
+ ->  -> // ===== TYPEWRITER ON SCROLL =====
+ ->  -> (function() {
+ ->  ->   function typeText(el) {
+ ->  ->     if (el.dataset.typed === '1') return;
+ ->  ->     el.dataset.typed = '1';
+ ->  ->     const delay = parseInt(el.dataset.typeDelay || '32', 10);
+ ->  ->     // Preserve HTML: type only text nodes roughly by stripping then restoring simple version
+ ->  ->     const fullHTML = el.innerHTML;
+ ->  ->     // For elements with nested tags, type plain text version for simplicity then set full HTML at end
+ ->  ->     const tmp = document.createElement('div');
+ ->  ->     tmp.innerHTML = fullHTML;
+ ->  ->     const plain = tmp.textContent || '';
+ ->  ->     el.classList.add('typing');
+ ->  ->     el.textContent = '';
+ ->  ->     let i = 0;
+ ->  ->     function tick() {
+ ->  ->       if (i <= plain.length) {
+ ->  ->         el.textContent = plain.slice(0, i);
+ ->  ->         i++;
+ ->  ->         setTimeout(tick, delay);
+ ->  ->       } else {
+ ->  ->         el.innerHTML = fullHTML; // restore bold/spans
+ ->  ->         el.classList.remove('typing');
+ ->  ->         el.classList.add('typewriter-done');
+ ->  ->       }
+ ->  ->     }
+ ->  ->     tick();
+ ->  ->   }
+ ->  -> 
+ ->  ->   const io = new IntersectionObserver((entries) => {
+ ->  ->     entries.forEach(entry => {
+ ->  ->       if (entry.isIntersecting) {
+ ->  ->         const nodes = entry.target.querySelectorAll('[data-typewriter]');
+ ->  ->         if (nodes.length) {
+ ->  ->           // cascade
+ ->  ->           nodes.forEach((n, idx) => {
+ ->  ->             setTimeout(() => typeText(n), idx * 180);
+ ->  ->           });
+ ->  ->         } else if (entry.target.hasAttribute('data-typewriter')) {
+ ->  ->           typeText(entry.target);
+ ->  ->         }
+ ->  ->         // only once per chapter block
+ ->  ->         io.unobserve(entry.target);
+ ->  ->       }
+ ->  ->     });
+ ->  ->   }, { threshold: 0.28 });
+ ->  -> 
+ ->  ->   function boot() {
+ ->  ->     document.querySelectorAll('.story-block').forEach(block => {
+ ->  ->       if (block.querySelector('[data-typewriter]')) io.observe(block);
+ ->  ->     });
+ ->  ->   }
+ ->  ->   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+ ->  ->   else boot();
+ ->  -> })();
+ ->  -> 
+ ->  -> 
+ -> </script>
 </body>
 </html>
