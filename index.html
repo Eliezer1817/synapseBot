@@ -22,13 +22,26 @@
   --bg: #030303;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html { scroll-behavior: smooth; background: var(--bg); }
+html, body {
+  scroll-behavior: smooth;
+  background: var(--bg);
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: auto;
+  position: relative;
+}
 body {
   font-family: 'Share Tech Mono', monospace;
   color: #e8e8e8;
   background: var(--bg);
-  overflow-x: hidden;
   line-height: 1.5;
+  touch-action: pan-y;
+}
+.story, .dashboard, .chapter, .dash-container, #landingPage {
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 /* ===== FIXED VIDEO LAYER ===== */
@@ -101,11 +114,10 @@ body {
   border: 1px solid rgba(255,170,100,0.22); border-radius: 18px;
   padding: 1.35rem 1.15rem 1.15rem;
   box-shadow: 0 28px 60px rgba(0,0,0,0.5), 0 0 40px rgba(255,90,0,0.08), inset 0 1px 1px rgba(255,255,255,0.12);
-  opacity: 0; transform: translateX(-50px) rotateY(18deg) scale(0.94);
+  opacity: 0; transform: translateY(16px) scale(0.98);
   transition: opacity 1s cubic-bezier(0.16,1,0.3,1), transform 1s cubic-bezier(0.16,1,0.3,1);
-  transform-style: preserve-3d;
 }
-.chapter-hero.in-view .panel { opacity: 1; transform: translateX(0) rotateY(0) scale(1); }
+.chapter-hero.in-view .panel { opacity: 1; transform: translateY(0) scale(1); }
 .panel::after {
   content: ''; position: absolute; top: 0; left: 12%; right: 12%; height: 1px;
   background: linear-gradient(90deg, transparent, rgba(255,180,120,0.85), var(--neon), transparent);
@@ -172,9 +184,9 @@ body {
   transition: opacity 0.95s cubic-bezier(0.16,1,0.3,1), transform 0.95s cubic-bezier(0.16,1,0.3,1);
   transform-style: preserve-3d; perspective: 800px;
 }
-.chapter:nth-child(even) .story-block { transform: translateX(-70px) rotateY(28deg) rotateZ(-4deg) scale(0.92); }
-.chapter:nth-child(odd) .story-block { transform: translateX(70px) rotateY(-28deg) rotateZ(4deg) scale(0.92); }
-.chapter.in-view .story-block { opacity: 1; transform: translateX(0) rotateY(0) rotateZ(0) scale(1); }
+.chapter:nth-child(even) .story-block { transform: translateY(18px) scale(0.98); }
+.chapter:nth-child(odd) .story-block { transform: translateY(18px) scale(0.98); }
+.chapter.in-view .story-block { opacity: 1; transform: translateY(0) scale(1); }
 
 .chapter-label {
   font-family: 'Orbitron', sans-serif; font-size: 0.5rem; letter-spacing: 0.28em;
@@ -474,23 +486,49 @@ input[type="range"]::-webkit-slider-thumb {
 
 /* Action Buttons */
 .action-buttons {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem; margin-top: 1.2rem;
+  display: grid; grid-template-columns: 1fr;
+  gap: 0.65rem; margin-top: 1.2rem;
+}
+@media (min-width: 720px) {
+  .action-buttons { grid-template-columns: repeat(3, 1fr); }
 }
 .btn-action {
-  padding: 0.9rem; border: none; border-radius: 10px; color: #0a0a0a;
-  font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 0.65rem;
-  letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer;
-  transition: all 0.3s; box-shadow: 0 0 20px rgba(0,0,0,0.3);
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.85rem 0.95rem; border-radius: 12px; cursor: pointer;
+  background: linear-gradient(155deg, rgba(255,255,255,0.05), rgba(8,8,12,0.72));
+  border: 1px solid rgba(255,170,100,0.2);
+  color: #fff; text-align: left;
+  font-family: 'Orbitron', sans-serif; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  transition: transform 0.25s, box-shadow 0.25s, border-color 0.25s;
+  box-shadow: 0 12px 28px rgba(0,0,0,0.35);
 }
+.btn-action .ico {
+  width: 36px; height: 36px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 9px; background: rgba(255,255,255,0.04);
+  border: 1px solid currentColor;
+}
+.btn-action .ico svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.btn-action .txt { display: flex; flex-direction: column; gap: 0.18rem; min-width: 0; }
+.btn-action .txt b { font-size: 0.62rem; line-height: 1.15; }
+.btn-action .txt span { font-family: 'Share Tech Mono', monospace; font-weight: 400; font-size: 0.46rem; letter-spacing: 0.1em; opacity: 0.48; text-transform: uppercase; }
 .btn-action:hover:not(:disabled) { transform: translateY(-2px); }
-.btn-action:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-action.blue { background: linear-gradient(135deg, #4488ff, var(--blue)); box-shadow: 0 0 20px var(--blue-glow); }
-.btn-action.blue:hover:not(:disabled) { box-shadow: 0 0 35px var(--blue-glow); }
-.btn-action.orange { background: linear-gradient(135deg, var(--neon-bright), var(--neon)); box-shadow: 0 0 20px var(--neon-glow); }
-.btn-action.orange:hover:not(:disabled) { box-shadow: 0 0 35px var(--neon-glow); }
-.btn-action.red { background: linear-gradient(135deg, #ff6666, var(--red)); box-shadow: 0 0 20px var(--red-glow); }
-.btn-action.red:hover:not(:disabled) { box-shadow: 0 0 35px var(--red-glow); }
+.btn-action:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn-action.blue { color: #8bb7ff; border-color: rgba(0,102,255,0.45); }
+.btn-action.blue:hover:not(:disabled) { box-shadow: 0 0 28px var(--blue-glow); }
+.btn-action.orange { color: var(--neon-bright); border-color: rgba(255,90,0,0.5); }
+.btn-action.orange:hover:not(:disabled) { box-shadow: 0 0 28px var(--neon-glow); }
+.btn-action.red { color: #ff7a7a; border-color: rgba(255,61,61,0.45); }
+.btn-action.red:hover:not(:disabled) { box-shadow: 0 0 28px var(--red-glow); }
+#ytDock {
+  position: fixed; right: 0.8rem; bottom: 3.4rem; z-index: 96;
+  width: 168px; height: 94px; border-radius: 10px; overflow: hidden;
+  border: 1px solid rgba(255,90,0,0.35); background: #000;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.55); display: none;
+}
+#ytDock.visible { display: block; }
+#ytDock iframe { width: 100%; height: 100%; border: 0; }
 
 /* Server Bot Status */
 .server-status {
@@ -594,7 +632,9 @@ input[type="range"]::-webkit-slider-thumb {
 <div id="landingPage">
   <div class="scroll-progress" id="progress"></div>
   <div class="video-stage" id="videoStage">
-    <video class="bg-video" id="bgVideo" autoplay muted loop playsinline>
+    <video class="bg-video" id="bgVideo" autoplay muted loop playsinline webkit-playsinline>
+      <source src="https://files.catbox.moe/nno4fj.mov" type="video/quicktime" />
+      <source src="https://files.catbox.moe/nno4fj.mov" type="video/mp4" />
       <source src="https://litter.catbox.moe/dpfvdf.mp4" type="video/mp4" />
     </video>
     <div class="video-vignette" id="vignette"></div>
@@ -731,7 +771,14 @@ input[type="range"]::-webkit-slider-thumb {
     </div>
     <div class="footer-bottom">© 2026 SYNAPSE_CORE · Eliezer1817</div>
   </footer>
-  <button class="sound-btn" id="soundBtn">🔊 ACTIVAR SONIDO</button>
+  <button class="sound-btn" id="soundBtn">SONIDO</button>
+  <div id="ytDock">
+    <iframe id="ytFrame" allow="autoplay; encrypted-media" allowfullscreen
+      src="https://www.youtube.com/embed/Y8w-2lzM-C4?enablejsapi=1&loop=1&playlist=Y8w-2lzM-C4&playsinline=1&rel=0"></iframe>
+  </div>
+  <div id="ytWrap" style="position:fixed;width:1px;height:1px;bottom:0;left:0;opacity:0;pointer-events:none;overflow:hidden">
+    <div id="ytPlayer"></div>
+  </div>
 </div>
 
 <!-- ==================== DASHBOARD FUTURISTA ==================== -->
@@ -791,31 +838,24 @@ input[type="range"]::-webkit-slider-thumb {
       <!-- Risk Config -->
       <div class="risk-config-section">
         <h3>🎯 GESTIÓN INTELIGENTE DE RIESGO</h3>
-        <div class="config-help">💡 Misma configuración para Demo y Real - Entrena como si fuera real</div>
+        <div class="config-help">💡 EMA/MACD/BB · riesgo fijo 1–2% · sin martingala · sin take profit · SL diario 5%</div>
         <div class="control-grid">
           <div class="control-item">
-            <label class="control-label">% Riesgo por Operación</label>
+            <label class="control-label">% Riesgo por Operación (1–2%)</label>
             <div class="slider-container">
-              <input type="range" id="riesgoPorcentaje" min="0.5" max="5" step="0.1" value="2">
+              <input type="range" id="riesgoPorcentaje" min="1" max="2" step="0.1" value="2">
               <span class="slider-value" id="riesgoValue">2%</span>
             </div>
           </div>
           <div class="control-item">
-            <label class="control-label">Protección por Racha</label>
-            <input type="number" id="maxPerdidasConsecutivas" class="control-input" value="3" min="2" max="6">
+            <label class="control-label">Máx. pérdidas seguidas (3–4)</label>
+            <input type="number" id="maxPerdidasConsecutivas" class="control-input" value="4" min="3" max="4">
           </div>
           <div class="control-item">
             <label class="control-label">Stop Loss Diario (%)</label>
             <div class="slider-container">
-              <input type="range" id="stopLossDiario" min="5" max="30" step="1" value="15">
-              <span class="slider-value" id="stopLossValue">15%</span>
-            </div>
-          </div>
-          <div class="control-item">
-            <label class="control-label">Take Profit Diario (%)</label>
-            <div class="slider-container">
-              <input type="range" id="takeProfitDiario" min="5" max="50" step="1" value="20">
-              <span class="slider-value" id="takeProfitValue">20%</span>
+              <input type="range" id="stopLossDiario" min="3" max="10" step="1" value="5">
+              <span class="slider-value" id="stopLossValue">5%</span>
             </div>
           </div>
           <div class="control-item">
@@ -836,9 +876,18 @@ input[type="range"]::-webkit-slider-thumb {
 
       <!-- Action Buttons -->
       <div class="action-buttons">
-        <button class="btn-action blue" id="serverBotBtn" onclick="iniciarBotServidor()">🚀 BOT 24/7 SERVIDOR</button>
-        <button class="btn-action orange" id="manualBtn" onclick="operacionManual()">🎯 OPERACIÓN MANUAL</button>
-        <button class="btn-action red" id="stopServerBotBtn" onclick="detenerBotServidor()">🛑 DETENER BOT SERVIDOR</button>
+        <button class="btn-action blue" id="serverBotBtn" onclick="iniciarBotServidor()">
+          <span class="ico"><svg viewBox="0 0 24 24"><path d="M12 3v4"/><circle cx="12" cy="14" r="7"/><path d="M9 14h6M12 11v6"/></svg></span>
+          <span class="txt"><b>Núcleo 24/7</b><span>Daemon en servidor</span></span>
+        </button>
+        <button class="btn-action orange" id="manualBtn" onclick="operacionManual()">
+          <span class="ico"><svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></span>
+          <span class="txt"><b>Ejecutar señal</b><span>Disparo manual</span></span>
+        </button>
+        <button class="btn-action red" id="stopServerBotBtn" onclick="detenerBotServidor()">
+          <span class="ico"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></svg></span>
+          <span class="txt"><b>Abortar núcleo</b><span>Detener daemon</span></span>
+        </button>
       </div>
 
       <!-- Server Bot Status -->
@@ -941,7 +990,8 @@ document.getElementById('ctaTop').addEventListener('click', (e) => {
 
 // Audio
 const AMBIENT_URL = 'https://litter.catbox.moe/fp1xsc.mp3';
-let audioCtx = null, masterGain = null, ambientEl = null, isSoundOn = false;
+const YT_VIDEO_ID = 'Y8w-2lzM-C4';
+let audioCtx = null, masterGain = null, ambientEl = null, isSoundOn = false, ytPlayer = null;
 function ensureAudioCtx() {
   if (audioCtx) return;
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -949,25 +999,87 @@ function ensureAudioCtx() {
   masterGain.gain.value = 0.85;
   masterGain.connect(audioCtx.destination);
 }
+function playKeyClick() {
+  ensureAudioCtx();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = 'square';
+  o.frequency.value = 720 + Math.random() * 520;
+  g.gain.setValueAtTime(0.05, audioCtx.currentTime);
+  o.connect(g); g.connect(masterGain);
+  o.start();
+  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.045);
+  o.stop(audioCtx.currentTime + 0.05);
+}
+function loadYouTubeApi() {
+  if (document.getElementById('ytApiScript')) return;
+  const tag = document.createElement('script');
+  tag.id = 'ytApiScript';
+  tag.src = 'https://www.youtube.com/iframe_api';
+  document.head.appendChild(tag);
+}
+window.onYouTubeIframeAPIReady = function() {
+  ytPlayer = new YT.Player('ytPlayer', {
+    height: '1',
+    width: '1',
+    videoId: YT_VIDEO_ID,
+    playerVars: { autoplay: 0, controls: 0, loop: 1, playlist: YT_VIDEO_ID, modestbranding: 1, rel: 0 },
+    events: {
+      onReady: function() {
+        if (isSoundOn && ytPlayer && ytPlayer.playVideo) ytPlayer.playVideo();
+      }
+    }
+  });
+};
 function startAmbient() {
   ensureAudioCtx();
   if (audioCtx.state === 'suspended') audioCtx.resume();
+  var vid = document.getElementById('bgVideo');
+  if (vid) {
+    vid.muted = false;
+    vid.volume = 0.55;
+    var playP = vid.play();
+    if (playP && playP.catch) playP.catch(function(){});
+  }
+  loadYouTubeApi();
+  if (ytPlayer && ytPlayer.playVideo) {
+    try { ytPlayer.unMute(); ytPlayer.setVolume(70); ytPlayer.playVideo(); } catch (e) {}
+  }
   if (!ambientEl) {
     ambientEl = new Audio(AMBIENT_URL);
-    ambientEl.loop = true; ambientEl.preload = 'auto'; ambientEl.volume = 0.45;
+    ambientEl.loop = true; ambientEl.preload = 'auto'; ambientEl.volume = 0.18;
   }
   ambientEl.play().catch(() => {});
   isSoundOn = true;
   const btn = document.getElementById('soundBtn');
-  btn.textContent = '🔊 SONIDO ON'; btn.classList.add('active');
+  btn.textContent = 'SONIDO ON'; btn.classList.add('active');
 }
 function stopAmbient() {
+  var vid = document.getElementById('bgVideo');
+  if (vid) { vid.muted = true; }
   if (ambientEl) { ambientEl.pause(); ambientEl.currentTime = 0; }
+  if (ytPlayer && ytPlayer.pauseVideo) { try { ytPlayer.pauseVideo(); } catch (e) {} }
   isSoundOn = false;
   const btn = document.getElementById('soundBtn');
-  btn.textContent = '🔊 ACTIVAR SONIDO'; btn.classList.remove('active');
+  btn.textContent = 'SONIDO'; btn.classList.remove('active');
 }
+document.addEventListener('touchstart', function unlockOnce() {
+  ensureAudioCtx();
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  var vid = document.getElementById('bgVideo');
+  if (vid) { var p = vid.play(); if (p && p.catch) p.catch(function(){}); }
+  document.removeEventListener('touchstart', unlockOnce);
+}, { passive: true });
 document.getElementById('soundBtn').onclick = () => { if (!isSoundOn) startAmbient(); else stopAmbient(); };
+['emailInput', 'passwordInput'].forEach(function(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('keydown', function(e) {
+    if (e.key.length === 1 || e.key === 'Backspace' || e.key === 'Enter') playKeyClick();
+  });
+});
+loadYouTubeApi();
 
 document.getElementById('toggleKey').onclick = () => {
   const inp = document.getElementById('passwordInput');
@@ -1062,9 +1174,8 @@ const appState = {
   botRunning: false,
   riesgoConfig: {
     riesgo_porcentaje: 2.0,
-    max_perdidas_consecutivas: 3,
-    stop_loss_diario: 15,
-    take_profit_diario: 20,
+    max_perdidas_consecutivas: 4,
+    stop_loss_diario: 5,
     monto_maximo: 10
   }
 };
@@ -1127,10 +1238,15 @@ async function logout() {
 }
 
 async function login() {
-  const email = document.getElementById('emailInput').value;
+  const email = document.getElementById('emailInput').value.trim();
   const password = document.getElementById('passwordInput').value;
   const connectBtn = document.getElementById('connectBtn');
   const loadingText = document.getElementById('loadingText');
+
+  if (!email || !password) {
+    alert('Ingresá email y clave de IQ Option');
+    return;
+  }
 
   connectBtn.disabled = true;
   connectBtn.textContent = 'CONECTANDO...';
@@ -1198,7 +1314,6 @@ function checkSession() {
 document.addEventListener('DOMContentLoaded', function() {
   const riesgoSlider = document.getElementById('riesgoPorcentaje');
   const stopLossSlider = document.getElementById('stopLossDiario');
-  const takeProfitSlider = document.getElementById('takeProfitDiario');
   
   riesgoSlider.addEventListener('input', function() {
     document.getElementById('riesgoValue').textContent = this.value + '%';
@@ -1208,10 +1323,6 @@ document.addEventListener('DOMContentLoaded', function() {
   stopLossSlider.addEventListener('input', function() {
     document.getElementById('stopLossValue').textContent = this.value + '%';
     appState.riesgoConfig.stop_loss_diario = parseInt(this.value);
-  });
-  takeProfitSlider.addEventListener('input', function() {
-    document.getElementById('takeProfitValue').textContent = this.value + '%';
-    appState.riesgoConfig.take_profit_diario = parseInt(this.value);
   });
   document.getElementById('maxPerdidasConsecutivas').addEventListener('input', function() {
     appState.riesgoConfig.max_perdidas_consecutivas = parseInt(this.value);
