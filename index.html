@@ -532,18 +532,49 @@ input[type="range"]::-webkit-slider-thumb {
 
 /* Server Bot Status */
 .server-status {
-  background: rgba(0,0,0,0.4); border: 1px solid rgba(61,220,132,0.3);
+  background: rgba(0,0,0,0.4); border: 1px solid rgba(255,90,0,0.22);
   border-radius: 12px; padding: 1rem; margin-top: 1rem;
-  box-shadow: 0 0 25px rgba(61,220,132,0.1);
+  box-shadow: 0 0 25px rgba(0,0,0,0.25);
 }
-.server-status-header { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; }
+.server-status.live { border-color: rgba(61,220,132,0.35); box-shadow: 0 0 25px rgba(61,220,132,0.08); }
+.server-status-header { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; margin-bottom: 0.75rem; }
+.server-status-left { display: flex; align-items: center; gap: 0.6rem; }
 .server-status-dot {
-  width: 8px; height: 8px; background: var(--green); border-radius: 50%;
-  box-shadow: 0 0 10px var(--green-glow); animation: pulse-dot 2s ease-in-out infinite;
+  width: 8px; height: 8px; background: #666; border-radius: 50%;
 }
-.server-status-title { font-family: 'Orbitron', sans-serif; font-size: 0.7rem; font-weight: 700; color: var(--green); letter-spacing: 0.05em; }
-.server-status-info { font-size: 0.6rem; color: rgba(255,255,255,0.5); line-height: 1.5; }
-.server-status-info span { color: var(--green); }
+.server-status.live .server-status-dot {
+  background: var(--green); box-shadow: 0 0 10px var(--green-glow); animation: pulse-dot 2s ease-in-out infinite;
+}
+.server-status-title { font-family: 'Orbitron', sans-serif; font-size: 0.68rem; font-weight: 700; color: rgba(255,255,255,0.7); letter-spacing: 0.06em; }
+.server-status.live .server-status-title { color: var(--green); }
+.badge-state {
+  font-family: 'Orbitron', sans-serif; font-size: 0.52rem; letter-spacing: 0.12em;
+  padding: 0.25rem 0.5rem; border-radius: 999px; border: 1px solid rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.45);
+}
+.badge-state.on { color: var(--green); border-color: rgba(61,220,132,0.4); }
+.badge-state.off { color: #ff8a8a; border-color: rgba(255,61,61,0.35); }
+.tele-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; }
+.tele-cell {
+  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px; padding: 0.55rem 0.6rem;
+}
+.tele-cell .k { display: block; font-size: 0.48rem; letter-spacing: 0.1em; color: rgba(255,255,255,0.38); text-transform: uppercase; }
+.tele-cell .v { display: block; margin-top: 0.2rem; font-family: 'Orbitron', sans-serif; font-size: 0.72rem; color: #fff; }
+.tele-cell .v.skip { color: #ffa500; }
+.tele-cell .v.call { color: var(--green); }
+.tele-cell .v.put { color: var(--red); }
+.tele-reason {
+  margin-top: 0.55rem; font-size: 0.58rem; color: rgba(255,255,255,0.55); line-height: 1.45;
+  min-height: 2.4em;
+}
+.tele-bars { display: flex; align-items: flex-end; gap: 4px; height: 36px; margin-top: 0.7rem; }
+.tele-bars span {
+  flex: 1; border-radius: 3px 3px 0 0; background: rgba(255,255,255,0.12); min-height: 4px;
+}
+.tele-bars span.call { background: var(--green); }
+.tele-bars span.put { background: var(--red); }
+.tele-bars span.skip { background: #ffa500; height: 40% !important; }
 
 /* Accounts Section */
 .accounts-section { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
@@ -891,16 +922,24 @@ input[type="range"]::-webkit-slider-thumb {
       </div>
 
       <!-- Server Bot Status -->
-      <div id="serverBotStatus" class="server-status" style="display: none;">
+      <div id="serverBotStatus" class="server-status">
         <div class="server-status-header">
-          <div class="server-status-dot"></div>
-          <strong class="server-status-title">🤖 BOT SERVIDOR ACTIVO 24/7</strong>
+          <div class="server-status-left">
+            <div class="server-status-dot"></div>
+            <strong class="server-status-title" id="serverStatusTitle">NÚCLEO 24/7</strong>
+          </div>
+          <span class="badge-state off" id="serverStateBadge">DETENIDO</span>
         </div>
-        <div class="server-status-info">
-          ✅ Funciona con celular apagado<br>
-          ⚡ Operando automáticamente cada <span id="serverInterval">5</span> minutos<br>
-          Última operación: <span id="lastServerOperation">-</span>
+        <div class="tele-grid">
+          <div class="tele-cell"><span class="k">Última señal</span><span class="v" id="serverLastDecision">—</span></div>
+          <div class="tele-cell"><span class="k">Score</span><span class="v" id="serverLastScore">—</span></div>
+          <div class="tele-cell"><span class="k">Último ciclo</span><span class="v" id="lastServerOperation">—</span></div>
+          <div class="tele-cell"><span class="k">Próximo ciclo</span><span class="v" id="serverCountdown">—</span></div>
+          <div class="tele-cell"><span class="k">Intervalo</span><span class="v"><span id="serverInterval">5</span> min</span></div>
+          <div class="tele-cell"><span class="k">Ciclos / ejecutados</span><span class="v" id="serverCycleStats">0 / 0</span></div>
         </div>
+        <div class="tele-reason" id="serverLastReason">El núcleo está detenido. Iniciá 24/7 para ver el pulso en vivo.</div>
+        <div class="tele-bars" id="serverBars"></div>
       </div>
     </div>
 
@@ -1487,35 +1526,90 @@ async function detenerBotServidor() {
   } catch (err) { alert('❌ Error: ' + err.message); }
 }
 
+let _serverMonitorId = null;
+let _serverPulse = [];
+
+function _fmtHora(ts) {
+  if (!ts) return '—';
+  var n = Number(ts);
+  if (n < 1e12) n = n * 1000;
+  var d = new Date(n);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleTimeString();
+}
+function _fmtCountdown(sec) {
+  if (sec == null || sec < 0) return '—';
+  var s = Math.floor(sec);
+  var m = Math.floor(s / 60);
+  var r = s % 60;
+  return (m < 10 ? '0' : '') + m + ':' + (r < 10 ? '0' : '') + r;
+}
+function pintarPulsoServidor(data) {
+  var box = document.getElementById('serverBotStatus');
+  if (!box) return;
+  var activo = !!(data && data.bot_activo);
+  box.classList.toggle('live', activo);
+  var badge = document.getElementById('serverStateBadge');
+  var title = document.getElementById('serverStatusTitle');
+  if (badge) {
+    badge.textContent = activo ? 'EN VIVO' : 'DETENIDO';
+    badge.className = 'badge-state ' + (activo ? 'on' : 'off');
+  }
+  if (title) title.textContent = activo ? 'NÚCLEO 24/7 ACTIVO' : 'NÚCLEO 24/7';
+
+  var last = (data && data.ultima_operacion) || {};
+  var res = last.resultado || last || {};
+  var decision = (res.decision || last.decision || '—').toString().toUpperCase();
+  var razon = res.razon || last.razon || (activo ? 'Esperando el próximo ciclo de análisis.' : 'El núcleo está detenido.');
+  var score = res.probabilidad || last.probabilidad || '—';
+  var decEl = document.getElementById('serverLastDecision');
+  if (decEl) {
+    decEl.textContent = decision;
+    decEl.className = 'v ' + decision.toLowerCase();
+  }
+  var sc = document.getElementById('serverLastScore');
+  if (sc) sc.textContent = score;
+  var reasonEl = document.getElementById('serverLastReason');
+  if (reasonEl) reasonEl.textContent = razon;
+  var lastEl = document.getElementById('lastServerOperation');
+  if (lastEl) lastEl.textContent = _fmtHora(data && (data.ultima_operacion_timestamp || last.timestamp));
+  var cd = document.getElementById('serverCountdown');
+  if (cd) cd.textContent = activo ? _fmtCountdown(data.tiempo_restante_segundos) : '—';
+  var iv = document.getElementById('serverInterval');
+  if (iv) iv.textContent = (data && data.intervalo) || 5;
+  var st = (data && data.estadisticas) || {};
+  var statsEl = document.getElementById('serverCycleStats');
+  if (statsEl) statsEl.textContent = (st.operaciones_ejecutadas || 0) + ' / ' + (st.operaciones_exitosas || 0);
+
+  if (decision && decision !== '—') {
+    var key = String(data && (data.ultima_operacion_timestamp || last.timestamp) || '') + decision;
+    if (!_serverPulse.length || _serverPulse[_serverPulse.length - 1].key !== key) {
+      _serverPulse.push({ key: key, d: decision.toLowerCase() });
+      if (_serverPulse.length > 16) _serverPulse.shift();
+    }
+  }
+  var bars = document.getElementById('serverBars');
+  if (bars) {
+    bars.innerHTML = _serverPulse.map(function(p) {
+      var h = p.d === 'skip' ? 14 : (p.d === 'call' || p.d === 'put' ? 36 : 10);
+      return '<span class="' + p.d + '" style="height:' + h + 'px"></span>';
+    }).join('');
+  }
+}
+
 function iniciarMonitorServidor() {
-  setInterval(async () => {
-    try {
-      const res = await fetch('/estado_bot_servidor', { headers: getAuthHeaders() });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.bot_activo) {
-          document.getElementById('lastServerOperation').textContent = new Date().toLocaleTimeString();
-        } else {
-          document.getElementById('serverBotStatus').style.display = 'none';
-        }
-      }
-    } catch (err) { console.log('⚠️ No se pudo verificar estado del servidor'); }
-  }, 30000);
+  if (_serverMonitorId) return;
+  _serverMonitorId = setInterval(verificarEstadoServidor, 8000);
 }
 
 async function verificarEstadoServidor() {
   try {
     const res = await fetch('/estado_bot_servidor', { headers: getAuthHeaders() });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.bot_activo) {
-        document.getElementById('serverBotStatus').style.display = 'block';
-        document.getElementById('serverInterval').textContent = data.intervalo || 5;
-        document.getElementById('lastServerOperation').textContent = data.ultima_operacion_timestamp ? new Date(data.ultima_operacion_timestamp).toLocaleTimeString() : '-';
-        iniciarMonitorServidor();
-      }
-    }
-  } catch (err) { console.log('ℹ️ No hay bot activo en servidor'); }
+    if (!res.ok) return;
+    const data = await res.json();
+    pintarPulsoServidor(data);
+    if (data.bot_activo) iniciarMonitorServidor();
+  } catch (err) { console.log('No se pudo leer estado del núcleo'); }
 }
 
 function actualizarMonitorRiesgo(estadisticas) {
