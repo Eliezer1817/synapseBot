@@ -554,6 +554,32 @@ input[type="range"]::-webkit-slider-thumb {
 }
 .badge-state.on { color: var(--green); border-color: rgba(61,220,132,0.4); }
 .badge-state.off { color: #ff8a8a; border-color: rgba(255,61,61,0.35); }
+.tele-activity {
+  margin: 0 0 0.75rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 10px;
+  background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(255,90,0,0.18);
+  color: rgba(255,255,255,0.82);
+  font-size: 0.72rem;
+  line-height: 1.45;
+  letter-spacing: 0.02em;
+}
+.server-status.live .tele-activity {
+  border-color: rgba(61,220,132,0.28);
+  color: #dfffea;
+}
+.tele-heartbeat {
+  margin-top: 0.55rem;
+  font-size: 0.55rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.35);
+}
+.v.call { color: var(--green); }
+.v.put { color: var(--red); }
+.v.skip { color: rgba(255,255,255,0.55); }
+
 .tele-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; }
 .tele-cell {
   background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
@@ -930,15 +956,19 @@ input[type="range"]::-webkit-slider-thumb {
           </div>
           <span class="badge-state off" id="serverStateBadge">DETENIDO</span>
         </div>
+        <div class="tele-activity" id="serverActivity">El núcleo está detenido. Iniciá 24/7 para ver qué hace en vivo.</div>
         <div class="tele-grid">
+          <div class="tele-cell"><span class="k">Fase</span><span class="v" id="serverPhase">DETENIDO</span></div>
+          <div class="tele-cell"><span class="k">Modo</span><span class="v" id="serverMode">—</span></div>
           <div class="tele-cell"><span class="k">Última señal</span><span class="v" id="serverLastDecision">—</span></div>
           <div class="tele-cell"><span class="k">Score</span><span class="v" id="serverLastScore">—</span></div>
           <div class="tele-cell"><span class="k">Último ciclo</span><span class="v" id="lastServerOperation">—</span></div>
           <div class="tele-cell"><span class="k">Próximo ciclo</span><span class="v" id="serverCountdown">—</span></div>
           <div class="tele-cell"><span class="k">Intervalo</span><span class="v"><span id="serverInterval">5</span> min</span></div>
-          <div class="tele-cell"><span class="k">Ciclos / ejecutados</span><span class="v" id="serverCycleStats">0 / 0</span></div>
+          <div class="tele-cell"><span class="k">Análisis / trades</span><span class="v" id="serverCycleStats">0 / 0</span></div>
         </div>
         <div class="tele-reason" id="serverLastReason">El núcleo está detenido. Iniciá 24/7 para ver el pulso en vivo.</div>
+        <div class="tele-heartbeat" id="serverHeartbeat">Sin heartbeat</div>
         <div class="tele-bars" id="serverBars"></div>
       </div>
     </div>
@@ -1253,9 +1283,12 @@ function restoreDashboard(userData) {
   
   document.getElementById('landingPage').classList.add('landing-hidden');
   document.getElementById('dashboard').classList.remove('hidden');
+  mostrarPanelNucleo();
+  iniciarMonitorServidor(true);
 }
 
 async function logout() {
+  detenerMonitorServidor();
   document.getElementById('serverBotStatus').style.display = 'none';
   if (!confirm('¿Cerrar sesión y volver al terminal de acceso?')) return;
   try {
@@ -1311,8 +1344,8 @@ async function login() {
 
     document.getElementById('landingPage').classList.add('landing-hidden');
     document.getElementById('dashboard').classList.remove('hidden');
-    
-    setTimeout(verificarEstadoServidor, 2000);
+    mostrarPanelNucleo();
+    iniciarMonitorServidor(true);
 
   } catch (err) {
     alert('❌ Error: ' + err.message);
@@ -1332,7 +1365,6 @@ function checkSession() {
         appState.sessionToken = token;
         appState.userData = data.user_data;
         restoreDashboard(data.user_data);
-        setTimeout(verificarEstadoServidor, 2000);
       } else {
         clearSessionToken();
         showLoginPanel();
@@ -1491,7 +1523,8 @@ async function iniciarBotServidor() {
   if (!confirm(`🚀 ¿INICIAR BOT 24/7 EN SERVIDOR?\n• Modo: ${modo.toUpperCase()}\n• Intervalo: ${intervalo} minutos\n• Riesgo: ${appState.riesgoConfig.riesgo_porcentaje}%`)) return;
 
   serverBotBtn.disabled = true;
-  serverBotBtn.textContent = '⏳ INICIANDO...';
+  const btnLabel = serverBotBtn.querySelector('b');
+  if (btnLabel) btnLabel.textContent = 'INICIANDO...';
   try {
     const res = await fetch('/iniciar_bot_servidor', {
       method: 'POST',
@@ -1501,16 +1534,17 @@ async function iniciarBotServidor() {
     const data = await res.json();
     if (!res.ok || !data.success) throw new Error(data.error || 'Error al iniciar bot');
 
-    document.getElementById('serverBotStatus').style.display = 'block';
+    mostrarPanelNucleo();
     document.getElementById('serverInterval').textContent = intervalo;
-    document.getElementById('lastServerOperation').textContent = new Date().toLocaleTimeString();
+    document.getElementById('serverMode').textContent = modo.toUpperCase();
+    document.getElementById('serverActivity').textContent = 'Núcleo iniciado. Conectando y armando el primer ciclo...';
+    iniciarMonitorServidor(true);
     alert('✅ Bot 24/7 iniciado en servidor');
-    iniciarMonitorServidor();
   } catch (err) {
     alert('❌ Error: ' + err.message);
   } finally {
     serverBotBtn.disabled = false;
-    serverBotBtn.textContent = '🚀 BOT 24/7 SERVIDOR';
+    if (btnLabel) btnLabel.textContent = 'Núcleo 24/7';
   }
 }
 
@@ -1520,14 +1554,23 @@ async function detenerBotServidor() {
     const res = await fetch('/detener_bot_servidor', { method: 'POST', headers: getAuthHeaders() });
     const data = await res.json();
     if (data.success) {
-      document.getElementById('serverBotStatus').style.display = 'none';
+      mostrarPanelNucleo();
+      await verificarEstadoServidor();
       alert('🛑 Bot servidor detenido');
     } else { throw new Error(data.error); }
   } catch (err) { alert('❌ Error: ' + err.message); }
 }
 
 let _serverMonitorId = null;
+let _serverCountdownId = null;
 let _serverPulse = [];
+let _serverEstadoCache = null;
+let _proximaTs = null;
+
+function mostrarPanelNucleo() {
+  const box = document.getElementById('serverBotStatus');
+  if (box) box.style.display = 'block';
+}
 
 function _fmtHora(ts) {
   if (!ts) return '—';
@@ -1544,23 +1587,65 @@ function _fmtCountdown(sec) {
   var r = s % 60;
   return (m < 10 ? '0' : '') + m + ':' + (r < 10 ? '0' : '') + r;
 }
+function _faseLabel(fase) {
+  var map = {
+    detenido: 'DETENIDO',
+    conectando: 'CONECTANDO',
+    esperando: 'ESPERANDO',
+    analizando: 'ANALIZANDO',
+    operando: 'OPERANDO',
+    resultado: 'RESULTADO',
+    riesgo: 'RIESGO',
+    error: 'ERROR'
+  };
+  return map[fase] || (fase ? String(fase).toUpperCase() : '—');
+}
+
+function _tickCountdownLocal() {
+  var cd = document.getElementById('serverCountdown');
+  if (!cd || !_proximaTs) return;
+  var activo = _serverEstadoCache && _serverEstadoCache.bot_activo;
+  if (!activo) { cd.textContent = '—'; return; }
+  cd.textContent = _fmtCountdown(Math.max(0, _proximaTs - (Date.now() / 1000)));
+}
+
 function pintarPulsoServidor(data) {
   var box = document.getElementById('serverBotStatus');
   if (!box) return;
+  mostrarPanelNucleo();
+  _serverEstadoCache = data || {};
   var activo = !!(data && data.bot_activo);
-  box.classList.toggle('live', activo);
+  var vivo = data && data.estado_vivo ? data.estado_vivo : {};
+  var fase = vivo.fase || (activo ? 'esperando' : 'detenido');
+  box.classList.toggle('live', activo && fase !== 'error');
+
   var badge = document.getElementById('serverStateBadge');
   var title = document.getElementById('serverStatusTitle');
   if (badge) {
-    badge.textContent = activo ? 'EN VIVO' : 'DETENIDO';
-    badge.className = 'badge-state ' + (activo ? 'on' : 'off');
+    if (!activo) badge.textContent = 'DETENIDO';
+    else if (fase === 'error') badge.textContent = 'ERROR';
+    else if (fase === 'riesgo') badge.textContent = 'RIESGO';
+    else badge.textContent = 'EN VIVO';
+    badge.className = 'badge-state ' + (activo && fase !== 'error' && fase !== 'riesgo' ? 'on' : 'off');
   }
   if (title) title.textContent = activo ? 'NÚCLEO 24/7 ACTIVO' : 'NÚCLEO 24/7';
 
+  var phaseEl = document.getElementById('serverPhase');
+  if (phaseEl) phaseEl.textContent = _faseLabel(fase);
+  var modeEl = document.getElementById('serverMode');
+  if (modeEl) modeEl.textContent = ((data && (data.modo || (data.config && data.config.modo))) || '—').toString().toUpperCase();
+
+  var activity = document.getElementById('serverActivity');
+  if (activity) {
+    activity.textContent = vivo.mensaje || (activo
+      ? 'Núcleo activo. Esperando actualización del próximo ciclo.'
+      : 'El núcleo está detenido. Iniciá 24/7 para ver qué hace en vivo.');
+  }
+
   var last = (data && data.ultima_operacion) || {};
   var res = last.resultado || last || {};
-  var decision = (res.decision || last.decision || '—').toString().toUpperCase();
-  var razon = res.razon || last.razon || (activo ? 'Esperando el próximo ciclo de análisis.' : 'El núcleo está detenido.');
+  var decision = (res.decision || last.decision || vivo.decision || '—').toString().toUpperCase();
+  var razon = res.razon || last.razon || vivo.mensaje || (activo ? 'Esperando el próximo ciclo de análisis.' : 'El núcleo está detenido.');
   var score = res.probabilidad || last.probabilidad || '—';
   var decEl = document.getElementById('serverLastDecision');
   if (decEl) {
@@ -1573,13 +1658,29 @@ function pintarPulsoServidor(data) {
   if (reasonEl) reasonEl.textContent = razon;
   var lastEl = document.getElementById('lastServerOperation');
   if (lastEl) lastEl.textContent = _fmtHora(data && (data.ultima_operacion_timestamp || last.timestamp));
+
+  _proximaTs = data && data.proxima_operacion_timestamp ? Number(data.proxima_operacion_timestamp) : null;
   var cd = document.getElementById('serverCountdown');
-  if (cd) cd.textContent = activo ? _fmtCountdown(data.tiempo_restante_segundos) : '—';
+  if (cd) {
+    if (activo && data && data.tiempo_restante_segundos != null) cd.textContent = _fmtCountdown(data.tiempo_restante_segundos);
+    else if (activo && _proximaTs) cd.textContent = _fmtCountdown(_proximaTs - (Date.now() / 1000));
+    else cd.textContent = '—';
+  }
   var iv = document.getElementById('serverInterval');
   if (iv) iv.textContent = (data && data.intervalo) || 5;
   var st = (data && data.estadisticas) || {};
   var statsEl = document.getElementById('serverCycleStats');
-  if (statsEl) statsEl.textContent = (st.operaciones_ejecutadas || 0) + ' / ' + (st.operaciones_exitosas || 0);
+  if (statsEl) {
+    var ciclos = st.ciclo_actual || st.operaciones_ejecutadas || 0;
+    var trades = st.operaciones_exitosas || 0;
+    statsEl.textContent = ciclos + ' / ' + trades;
+  }
+
+  var hb = document.getElementById('serverHeartbeat');
+  if (hb) {
+    if (vivo.heartbeat) hb.textContent = 'Heartbeat ' + _fmtHora(vivo.heartbeat) + (data && data.thread_vivo === false && activo ? ' · thread caído' : '');
+    else hb.textContent = activo ? 'Esperando heartbeat...' : 'Sin heartbeat';
+  }
 
   if (decision && decision !== '—') {
     var key = String(data && (data.ultima_operacion_timestamp || last.timestamp) || '') + decision;
@@ -1597,9 +1698,20 @@ function pintarPulsoServidor(data) {
   }
 }
 
-function iniciarMonitorServidor() {
-  if (_serverMonitorId) return;
-  _serverMonitorId = setInterval(verificarEstadoServidor, 8000);
+function iniciarMonitorServidor(forceImmediate) {
+  mostrarPanelNucleo();
+  if (!_serverMonitorId) {
+    _serverMonitorId = setInterval(verificarEstadoServidor, 5000);
+  }
+  if (!_serverCountdownId) {
+    _serverCountdownId = setInterval(_tickCountdownLocal, 1000);
+  }
+  if (forceImmediate) verificarEstadoServidor();
+}
+
+function detenerMonitorServidor() {
+  if (_serverMonitorId) { clearInterval(_serverMonitorId); _serverMonitorId = null; }
+  if (_serverCountdownId) { clearInterval(_serverCountdownId); _serverCountdownId = null; }
 }
 
 async function verificarEstadoServidor() {
@@ -1608,7 +1720,7 @@ async function verificarEstadoServidor() {
     if (!res.ok) return;
     const data = await res.json();
     pintarPulsoServidor(data);
-    if (data.bot_activo) iniciarMonitorServidor();
+    iniciarMonitorServidor(false);
   } catch (err) { console.log('No se pudo leer estado del núcleo'); }
 }
 

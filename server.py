@@ -241,11 +241,20 @@ def obtener_balances_reales(iq):
     return real_balance, demo_balance, real_id, demo_id
 
 # 🔥 NUEVA FUNCIÓN MEJORADA: Bot servidor 24/7 con timing preciso
+def _set_fase_bot(fase, mensaje='', **extra):
+    """Actualiza fase + heartbeat del daemon para el dashboard."""
+    try:
+        database.actualizar_estado_vivo(fase, mensaje, **extra)
+    except Exception as e:
+        print(f"⚠️ No se pudo guardar fase del bot: {e}")
+
+
 def ejecutar_bot_servidor():
     """Ejecuta el bot automático en el servidor de forma continua y precisa"""
     global bot_servidor_thread
     
     print(f"\n🎯 INICIANDO BOT SERVIDOR 24/7 - INDEPENDIENTE DEL CLIENTE")
+    _set_fase_bot('conectando', 'Conectando a IQ Option...')
     
     # Cargar configuración desde la base de datos
     db_data = database.load_database()
@@ -255,6 +264,7 @@ def ejecutar_bot_servidor():
 
     if not bot_credenciales or not bot_credenciales.get('email') or not bot_credenciales.get('password'):
         print("❌ ERROR: Credenciales del bot no configuradas. Deteniendo bot.")
+        _set_fase_bot('error', 'Credenciales del bot no configuradas. Volvé a iniciar sesión.')
         database.detener_bot_servidor()
         return
 
@@ -264,6 +274,7 @@ def ejecutar_bot_servidor():
         print("✅ Bot conectado exitosamente.")
     except Exception as e:
         print(f"❌ ERROR FATAL al conectar el bot: {e}")
+        _set_fase_bot('error', f'No se pudo conectar a IQ Option: {e}')
         database.detener_bot_servidor()
         return
 
@@ -282,23 +293,48 @@ def ejecutar_bot_servidor():
     
     # Estadísticas de inicio
     bot_stats['inicio_timestamp'] = time.time()
+    bot_stats['proxima_operacion_timestamp'] = siguiente_ciclo
+    bot_stats['ciclo_actual'] = 0
     database.actualizar_estadisticas_bot(bot_stats)
+    _set_fase_bot(
+        'esperando',
+        'Núcleo activo. Esperando el primer ciclo de análisis.',
+        ciclo=0,
+        modo=bot_config.get('modo', 'demo'),
+    )
     
     ciclo_numero = 0
     
     while database.esta_activo_bot_servidor():
         try:
             ciclo_numero += 1
+            bot_stats['ciclo_actual'] = ciclo_numero
             tiempo_actual = time.time()
             
             # 🔥 TIMING PRECISO: Esperar hasta el próximo ciclo exacto
             tiempo_espera = siguiente_ciclo - tiempo_actual
             if tiempo_espera > 0:
+                _set_fase_bot(
+                    'esperando',
+                    f'Esperando próximo ciclo ({int(tiempo_espera)}s). Modo {bot_config.get("modo", "demo").upper()}.',
+                    ciclo=ciclo_numero,
+                    modo=bot_config.get('modo', 'demo'),
+                )
                 # Espera precisa en segmentos pequeños para poder detener el bot
                 segmentos = int(tiempo_espera)
                 for i in range(segmentos):
                     if not database.esta_activo_bot_servidor():
+                        _set_fase_bot('detenido', 'El núcleo fue detenido.')
                         return
+                    # Heartbeat cada ~15s mientras espera
+                    if i % 15 == 0:
+                        restante = max(0, int(siguiente_ciclo - time.time()))
+                        _set_fase_bot(
+                            'esperando',
+                            f'Esperando próximo ciclo ({restante}s). Modo {bot_config.get("modo", "demo").upper()}.',
+                            ciclo=ciclo_numero,
+                            modo=bot_config.get('modo', 'demo'),
+                        )
                     time.sleep(1)
                 if tiempo_espera - segmentos > 0:
                     time.sleep(tiempo_espera - segmentos)
@@ -319,6 +355,13 @@ def ejecutar_bot_servidor():
             # Stop / racha: operar.py ya bloquea. Si viene STOP_LOSS, apagar el loop 24/7.
             stop_loss_diario = bot_config.get('stop_loss_diario', 5)
             
+            _set_fase_bot(
+                'analizando',
+                f'Ciclo {ciclo_numero}: leyendo velas y evaluando señal EMA/MACD/BB...',
+                ciclo=ciclo_numero,
+                modo=bot_config.get('modo', 'demo'),
+            )
+
             # 🔥 EJECUTAR OPERACIÓN
             resultado = ejecutar_operacion(
                 session_activa['iq'],
@@ -333,6 +376,24 @@ def ejecutar_bot_servidor():
                     'monto_maximo': bot_config.get('monto_maximo', 10)
                 }
             )
+
+            decision = (resultado.get('decision') or 'SKIP').upper()
+            if resultado.get('ejecutado'):
+                _set_fase_bot(
+                    'operando',
+                    f'Ciclo {ciclo_numero}: ejecutó {decision}. Esperando resultado del trade...',
+                    ciclo=ciclo_numero,
+                    decision=decision,
+                    modo=bot_config.get('modo', 'demo'),
+                )
+            else:
+                _set_fase_bot(
+                    'resultado',
+                    f'Ciclo {ciclo_numero}: {decision} — {resultado.get("razon") or "sin ejecución"}',
+                    ciclo=ciclo_numero,
+                    decision=decision,
+                    modo=bot_config.get('modo', 'demo'),
+                )
             
             # 🔥 ACTUALIZAR ESTADÍSTICAS
             bot_stats['operaciones_ejecutadas'] += 1
@@ -346,6 +407,12 @@ def ejecutar_bot_servidor():
             
             if resultado.get('decision') in ('STOP_LOSS',) or (resultado.get('estadisticas_riesgo') or {}).get('bloqueado'):
                 print(f"🛑 Riesgo: bot detenido ({resultado.get('razon')})")
+                _set_fase_bot(
+                    'riesgo',
+                    f'Detenido por riesgo: {resultado.get("razon") or "stop / racha"}',
+                    ciclo=ciclo_numero,
+                    decision=decision,
+                )
                 database.detener_bot_servidor()
                 bot_stats['ultima_operacion_timestamp'] = time.time()
                 database.actualizar_estadisticas_bot(bot_stats)
@@ -358,6 +425,14 @@ def ejecutar_bot_servidor():
                     ganancia = resultado['resultado_trade'].get('ganancia', 0)
                     bot_stats['ganancia_total'] += ganancia
                     print(f"💰 Resultado: {'✅ GANANCIA' if ganancia > 0 else '❌ PÉRDIDA'} - ${abs(ganancia):.2f}")
+                    win_txt = 'WIN' if ganancia > 0 else ('EMPATE' if ganancia == 0 else 'LOSS')
+                    _set_fase_bot(
+                        'resultado',
+                        f'Ciclo {ciclo_numero}: {decision} → {win_txt} (${ganancia:+.2f}). Esperando próximo ciclo.',
+                        ciclo=ciclo_numero,
+                        decision=decision,
+                        modo=bot_config.get('modo', 'demo'),
+                    )
             
             bot_stats['ultima_operacion_timestamp'] = time.time()
             database.actualizar_estadisticas_bot(bot_stats)
@@ -371,13 +446,28 @@ def ejecutar_bot_servidor():
             print(f"   Stop loss diario: ${stop_loss_diario}")
             print(f"⏳ Próxima operación: {time.strftime('%H:%M:%S', time.localtime(siguiente_ciclo))}")
             print(f"{'='*60}\n")
+
+            if database.esta_activo_bot_servidor() and not resultado.get('ejecutado'):
+                _set_fase_bot(
+                    'esperando',
+                    f'Última señal {decision}. Esperando próximo ciclo.',
+                    ciclo=ciclo_numero,
+                    decision=decision,
+                    modo=bot_config.get('modo', 'demo'),
+                )
                 
         except Exception as e:
             print(f"❌ ERROR en bot servidor: {e}")
             traceback.print_exc()
+            _set_fase_bot('error', f'Error en ciclo: {e}. Reintentando en 2 min.')
             # En caso de error, esperar 2 minutos antes de reintentar
             siguiente_ciclo = time.time() + 120
+            bot_stats['proxima_operacion_timestamp'] = siguiente_ciclo
+            database.actualizar_estadisticas_bot(bot_stats)
     
+    vivo = database.obtener_estado_vivo()
+    if vivo.get('fase') not in ('error', 'riesgo'):
+        _set_fase_bot('detenido', 'El núcleo está detenido.')
     print("🛑 BOT SERVIDOR DETENIDO")
 
 class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
@@ -429,19 +519,31 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
             if proxima_operacion:
                 tiempo_restante = max(0, proxima_operacion - time.time())
             
+            thread_vivo = bool(bot_servidor_thread and bot_servidor_thread.is_alive())
+            estado_vivo = database.obtener_estado_vivo()
+            # Si la DB dice activo pero el thread murió, avisar al dashboard
+            bot_activo = bool(db_data['bot_servidor']['activo'])
+            if bot_activo and not thread_vivo:
+                estado_vivo = dict(estado_vivo or {})
+                estado_vivo['fase'] = 'error'
+                estado_vivo['mensaje'] = 'El flag dice activo, pero el proceso del núcleo no está corriendo. Reiniciá el 24/7.'
+
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps({
                 'success': True,
-                'bot_activo': db_data['bot_servidor']['activo'],
+                'bot_activo': bot_activo,
+                'thread_vivo': thread_vivo,
                 'config': bot_config,
                 'estadisticas': bot_stats,
+                'estado_vivo': estado_vivo,
                 'ultima_operacion': database.obtener_ultima_operacion_bot(),
                 'ultima_operacion_timestamp': bot_stats.get('ultima_operacion_timestamp'),
                 'proxima_operacion_timestamp': proxima_operacion,
                 'tiempo_restante_segundos': tiempo_restante,
-                'intervalo': bot_config.get('intervalo', 5)
+                'intervalo': bot_config.get('intervalo', 5),
+                'modo': bot_config.get('modo', 'demo')
             }).encode('utf-8'))
             return
 
@@ -835,6 +937,11 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                         'proxima_operacion_timestamp': None
                     }
                     database.actualizar_estadisticas_bot(nuevas_estadisticas)
+                    database.actualizar_estado_vivo(
+                        'conectando',
+                        'Iniciando núcleo 24/7...',
+                        modo=config.get('modo', 'demo'),
+                    )
                     
                     # Iniciar thread del bot
                     bot_servidor_thread = threading.Thread(target=ejecutar_bot_servidor)
@@ -875,6 +982,7 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                     if not database.esta_activo_bot_servidor():
                         raise Exception("El bot servidor no está activo")
                     
+                    database.actualizar_estado_vivo('detenido', 'El núcleo fue detenido desde el dashboard.')
                     database.detener_bot_servidor()
                     database.limpiar_credenciales_bot()  # Limpiar credenciales
                     

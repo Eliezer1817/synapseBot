@@ -21,6 +21,11 @@ def init_database():
                     'operaciones_exitosas': 0,
                     'ganancia_total': 0.0,
                     'ultima_operacion_timestamp': None
+                },
+                'estado_vivo': {
+                    'fase': 'detenido',
+                    'mensaje': 'El núcleo está detenido.',
+                    'heartbeat': None
                 }
             }
         }
@@ -112,10 +117,37 @@ def limpiar_credenciales_bot():
     data['bot_servidor']['credenciales'] = None
     save_database(data)
 
+def actualizar_estado_vivo(fase, mensaje='', **extra):
+    """Fase en vivo del daemon 24/7 para el dashboard."""
+    data = load_database()
+    estado = data['bot_servidor'].setdefault('estado_vivo', {})
+    estado['fase'] = fase
+    estado['mensaje'] = mensaje
+    estado['heartbeat'] = time.time()
+    for k, v in extra.items():
+        estado[k] = v
+    data['bot_servidor']['estado_vivo'] = estado
+    save_database(data)
+    return estado
+
+def obtener_estado_vivo():
+    data = load_database()
+    return data['bot_servidor'].get('estado_vivo') or {
+        'fase': 'detenido',
+        'mensaje': 'El núcleo está detenido.',
+        'heartbeat': None,
+    }
+
 def detener_bot_servidor():
     """Detener el bot servidor en la base de datos"""
     data = load_database()
     data['bot_servidor']['activo'] = False
+    estado = data['bot_servidor'].setdefault('estado_vivo', {})
+    if estado.get('fase') not in ('error', 'riesgo'):
+        estado['fase'] = 'detenido'
+        estado['mensaje'] = 'El núcleo está detenido.'
+    estado['heartbeat'] = time.time()
+    data['bot_servidor']['estado_vivo'] = estado
     save_database(data)
 
 def esta_activo_bot_servidor():
