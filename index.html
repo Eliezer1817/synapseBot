@@ -404,6 +404,72 @@ html, body { overflow-x: hidden; }
   display: none !important;
 }
 
+
+/* Landing section menu */
+.landing-menu {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 60;
+  display: flex; align-items: center; gap: 0.4rem;
+  padding: 0.55rem 0.7rem;
+  background: rgba(5,5,10,0.78);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(255,140,70,0.22);
+  overflow-x: auto; scrollbar-width: none;
+}
+.landing-menu::-webkit-scrollbar { display: none; }
+.landing-hidden .landing-menu { display: none !important; }
+.landing-menu .lm-brand {
+  flex: 0 0 auto; font-family: 'Orbitron', sans-serif; font-size: 0.62rem;
+  letter-spacing: 0.1em; color: var(--neon); text-decoration: none;
+  margin-right: 0.4rem; white-space: nowrap;
+}
+.landing-menu a.lm-link {
+  flex: 0 0 auto; text-decoration: none; white-space: nowrap;
+  font-size: 0.62rem; letter-spacing: 0.04em; color: rgba(255,255,255,0.55);
+  padding: 0.4rem 0.65rem; border-radius: 999px; border: 1px solid transparent;
+}
+.landing-menu a.lm-link:hover, .landing-menu a.lm-link.active {
+  color: #fff; border-color: rgba(255,140,70,0.4); background: rgba(255,90,0,0.12);
+}
+.story { padding-top: 2.6rem; }
+
+/* Referentes */
+.ref-grid {
+  display: grid; gap: 0.85rem; margin-top: 1rem;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 720px) {
+  .ref-grid { grid-template-columns: 1fr 1fr; }
+}
+.ref-card {
+  text-align: left; padding: 1rem; border-radius: 16px;
+  background: rgba(0,0,0,0.38); border: 1px solid rgba(255,90,0,0.22);
+}
+.ref-top { display: flex; gap: 0.85rem; align-items: center; margin-bottom: 0.7rem; }
+.ref-avatar {
+  width: 72px; height: 72px; border-radius: 50%; flex: 0 0 auto;
+  object-fit: cover; border: 2px solid rgba(255,140,70,0.55);
+  box-shadow: 0 0 18px rgba(255,90,0,0.25); background: #1a1a22;
+}
+.ref-avatar.fallback {
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Orbitron', sans-serif; font-size: 1.1rem; color: var(--neon);
+  background: radial-gradient(circle at 30% 30%, rgba(255,120,40,0.35), rgba(20,20,28,0.95));
+}
+.ref-name { font-family: 'Orbitron', sans-serif; font-size: 0.85rem; color: #fff; margin: 0 0 0.2rem; }
+.ref-role { font-size: 0.65rem; color: rgba(255,180,120,0.85); letter-spacing: 0.03em; }
+.ref-wealth {
+  margin: 0.55rem 0; font-size: 0.72rem; color: var(--green);
+  font-family: 'Share Tech Mono', monospace;
+}
+.ref-bio { font-size: 0.7rem; color: rgba(255,255,255,0.55); line-height: 1.55; margin: 0 0 0.65rem; }
+.ref-links { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.ref-links a {
+  font-size: 0.62rem; text-decoration: none; color: #ffb27a;
+  border: 1px solid rgba(255,140,70,0.3); border-radius: 999px;
+  padding: 0.3rem 0.65rem;
+}
+.ref-note { font-size: 0.62rem; color: rgba(255,255,255,0.4); margin-top: 0.9rem; line-height: 1.45; text-align: left; }
+
 /* Dashboard container */
 .dashboard {
   animation: fadeInDash 0.8s cubic-bezier(0.16,1,0.3,1);
@@ -872,6 +938,20 @@ input[type="range"]::-webkit-slider-thumb {
 
 <!-- ==================== LANDING PAGE ==================== -->
 <div id="landingPage">
+  <nav class="landing-menu" aria-label="Menú de la historia">
+    <a class="lm-brand" href="#acceso">SynapseBot</a>
+    <a class="lm-link" href="#acceso">Acceso</a>
+    <a class="lm-link" href="#ch1">Qué es</a>
+    <a class="lm-link" href="#ch2">Pipeline</a>
+    <a class="lm-link" href="#ch3">Capacidades</a>
+    <a class="lm-link" href="#ch4">Señal</a>
+    <a class="lm-link" href="#ch5">Mercado</a>
+    <a class="lm-link" href="#ch6">Por qué</a>
+    <a class="lm-link" href="#ch-refs">Referentes</a>
+    <a class="lm-link" href="#ch-bots">Transparencia</a>
+    <a class="lm-link" href="#ch-risk">Riesgo</a>
+  </nav>
+
   <div class="scroll-progress" id="progress"></div>
   <div class="video-stage" id="videoStage">
     <video class="bg-video" id="bgVideo" autoplay muted loop playsinline webkit-playsinline>
@@ -934,7 +1014,7 @@ input[type="range"]::-webkit-slider-thumb {
     </section>
 
     <!-- CH 2 -->
-    <section class="chapter" data-chapter="2" data-video-bright="0.45" data-video-y="15">
+    <section class="chapter" data-chapter="2" data-video-bright="0.45" data-video-y="15" id="ch2">
       <div class="story-block story-glass">
         <div class="chapter-label">Capítulo 02 · Cómo funciona</div>
         <h2 class="story-title">Pipeline de<br><span class="hl">decisión</span></h2>
@@ -948,7 +1028,7 @@ input[type="range"]::-webkit-slider-thumb {
     </section>
 
     <!-- CH 3 -->
-    <section class="chapter" data-chapter="3" data-video-bright="0.4" data-video-y="20">
+    <section class="chapter" data-chapter="3" data-video-bright="0.4" data-video-y="20" id="ch3">
       <div class="story-block">
         <div class="chapter-label">Capítulo 03 · Capacidades</div>
         <h2 class="story-title">Qué puede<br><span class="hl">hacer el bot</span></h2>
@@ -1028,7 +1108,88 @@ input[type="range"]::-webkit-slider-thumb {
       </div>
     </section>
 
-        <!-- CH 7 POLICY -->
+    
+    <!-- CH REFS -->
+    <section class="chapter" data-chapter="6b" data-video-bright="0.4" data-video-y="16" id="ch-refs">
+      <div class="story-block story-glass">
+        <div class="chapter-label">Capítulo · Referentes</div>
+        <h2 class="story-title">Quienes marcaron el<br><span class="hl">trading algorítmico</span></h2>
+        <p class="story-text">Figuras históricas del trading sistemático / cuantitativo institucional. Sus resultados <strong style="color:#fff">no garantizan</strong> nada en binarias OTC ni en SynapseBot: son otro mercado, otra escala y otra infraestructura.</p>
+        <div class="ref-grid">
+          <article class="ref-card">
+            <div class="ref-top">
+              <img class="ref-avatar" src="https://upload.wikimedia.org/wikipedia/commons/thumb/7/7f/Jim_Simons_at_MSRI.jpg/440px-Jim_Simons_at_MSRI.jpg" alt="Jim Simons" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+              <div class="ref-avatar fallback" style="display:none" aria-hidden="true">JS</div>
+              <div>
+                <h3 class="ref-name">Jim Simons</h3>
+                <div class="ref-role">Fundador · Renaissance Technologies</div>
+              </div>
+            </div>
+            <div class="ref-wealth">Patrimonio estimado al fallecer (2024): ~US$31.4B · Forbes</div>
+            <p class="ref-bio">Matemático y “quant”. Creó Renaissance y el Medallion Fund, famoso por modelos matemáticos/algoritmos sobre ineficiencias de mercado. Falleció en mayo 2024.</p>
+            <div class="ref-links">
+              <a href="https://en.wikipedia.org/wiki/Jim_Simons" target="_blank" rel="noopener">Wikipedia</a>
+              <a href="https://www.simonsfoundation.org/" target="_blank" rel="noopener">Simons Foundation</a>
+              <a href="https://www.rentec.com/" target="_blank" rel="noopener">Renaissance</a>
+            </div>
+          </article>
+
+          <article class="ref-card">
+            <div class="ref-top">
+              <img class="ref-avatar" src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5d/Kenneth_C._Griffin.jpg/440px-Kenneth_C._Griffin.jpg" alt="Ken Griffin" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+              <div class="ref-avatar fallback" style="display:none" aria-hidden="true">KG</div>
+              <div>
+                <h3 class="ref-name">Ken Griffin</h3>
+                <div class="ref-role">Fundador &amp; CEO · Citadel</div>
+              </div>
+            </div>
+            <div class="ref-wealth">Patrimonio estimado: ~US$50B+ · Forbes (varía en tiempo real)</div>
+            <p class="ref-bio">Fundó Citadel (hedge fund multi-estrategia, con fuerte pata cuantitativa) y Citadel Securities (market making). Ejemplo de escala institucional, no de bot retail.</p>
+            <div class="ref-links">
+              <a href="https://www.forbes.com/profile/ken-griffin/" target="_blank" rel="noopener">Forbes</a>
+              <a href="https://www.citadel.com/" target="_blank" rel="noopener">Citadel</a>
+              <a href="https://en.wikipedia.org/wiki/Ken_Griffin_(businessman)" target="_blank" rel="noopener">Wikipedia</a>
+            </div>
+          </article>
+
+          <article class="ref-card">
+            <div class="ref-top">
+              <div class="ref-avatar fallback" style="display:flex" aria-hidden="true">IT</div>
+              <div>
+                <h3 class="ref-name">Igor Tulchinsky</h3>
+                <div class="ref-role">Fundador, Chairman &amp; CEO · WorldQuant</div>
+              </div>
+            </div>
+            <div class="ref-wealth">Patrimonio estimado: ~US$1.7B · reportes Forbes / medios (aprox.)</div>
+            <p class="ref-bio">Cuant nacido en Bielorrusia. Fundó WorldQuant (2007), firma de inversión cuantitativa con miles de “alphas” algorítmicos. También impulsó WorldQuant University.</p>
+            <div class="ref-links">
+              <a href="https://www.worldquant.com/" target="_blank" rel="noopener">WorldQuant oficial</a>
+              <a href="https://en.wikipedia.org/wiki/WorldQuant" target="_blank" rel="noopener">Wikipedia (firma)</a>
+              <a href="https://www.wqu.org/" target="_blank" rel="noopener">WorldQuant University</a>
+            </div>
+          </article>
+
+          <article class="ref-card">
+            <div class="ref-top">
+              <div class="ref-avatar fallback" style="display:flex" aria-hidden="true">ES</div>
+              <div>
+                <h3 class="ref-name">Ed Seykota</h3>
+                <div class="ref-role">Pionero · sistemas computerizados / trend following</div>
+              </div>
+            </div>
+            <div class="ref-wealth">Caso documentado: cuenta de cliente ~US$5.000 → ~US$15M (años 70–80) · Market Wizards</div>
+            <p class="ref-bio">Ingeniero y trader sistemático. De los primeros en usar computadoras para sistemas mecánicos de seguimiento de tendencia. Perfil clásico en “Market Wizards” (Jack Schwager). No es un billionaire Forbes típico; su legado es metodológico.</p>
+            <div class="ref-links">
+              <a href="https://seykota.com/" target="_blank" rel="noopener">seykota.com</a>
+              <a href="https://en.wikipedia.org/wiki/Ed_Seykota" target="_blank" rel="noopener">Wikipedia</a>
+            </div>
+          </article>
+        </div>
+        <p class="ref-note">Fuentes de patrimonio: estimaciones públicas (Forbes / Wikipedia / prensa). Cifras cambian y no son auditorías. SynapseBot no está afiliado a estas personas ni firmas.</p>
+      </div>
+    </section>
+
+    <!-- CH 7 POLICY -->
     <section class="chapter" data-chapter="7" data-video-bright="0.48" data-video-y="14" id="ch-bots">
       <div class="story-block story-glass">
         <div class="chapter-label">Capítulo 07 · Transparencia</div>
@@ -1062,7 +1223,7 @@ input[type="range"]::-webkit-slider-thumb {
 
     <!-- CH 8 -->
 
-    <section class="chapter" data-chapter="8" data-video-bright="0.7" data-video-y="5">
+    <section class="chapter" data-chapter="8" data-video-bright="0.7" data-video-y="5" id="ch-risk">
       <div class="story-block story-glass">
         <div class="chapter-label">Capítulo 08 · Riesgo</div>
         <h2 class="story-title">Antes de<br><span class="hl">conectar</span></h2>
@@ -1383,6 +1544,21 @@ function onScroll() {
 window.addEventListener('scroll', onScroll, { passive: true });
 window.addEventListener('resize', onScroll, { passive: true });
 chapters[0].classList.add('in-view');
+function syncLandingMenu() {
+  const links = [...document.querySelectorAll('.landing-menu .lm-link')];
+  if (!links.length) return;
+  let current = links[0];
+  links.forEach(a => {
+    const id = a.getAttribute('href').slice(1);
+    const el = document.getElementById(id);
+    if (!el) return;
+    const top = el.getBoundingClientRect().top;
+    if (top <= 120) current = a;
+  });
+  links.forEach(a => a.classList.toggle('active', a === current));
+}
+addEventListener('scroll', syncLandingMenu, { passive: true });
+syncLandingMenu();
 navBtns[0].classList.add('active');
 updateStory();
 
