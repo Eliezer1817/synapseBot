@@ -47,7 +47,55 @@ class SessionManager:
             'gestor_riesgo': None
         }
         session_tokens[email] = token
+        SessionManager._persist_token(token, email)
         return token
+
+    @staticmethod
+    def _persist_token(token, email):
+        path = os.path.join(CWD, 'sessions.json')
+        data = {}
+        try:
+            if os.path.exists(path):
+                with open(path, 'r', encoding='utf-8') as f:
+                    data = json.load(f) or {}
+        except Exception:
+            data = {}
+        data[token] = {'email': email, 'ts': time.time()}
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(data, f)
+        except Exception as e:
+            print(f"⚠️ No se pudo persistir sesión: {e}")
+
+    @staticmethod
+    def _restore_session(token):
+        path = os.path.join(CWD, 'sessions.json')
+        try:
+            if not os.path.exists(path):
+                return None
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f) or {}
+        except Exception:
+            return None
+        info = data.get(token)
+        if not info:
+            return None
+        email = info.get('email')
+        creds = database.obtener_credenciales_bot() or {}
+        if not email or creds.get('email') != email or not creds.get('password'):
+            return None
+        print(f"🔄 Restaurando sesión de {email} tras reinicio de Fly...")
+        iq_session = _connect(email, creds['password'])
+        active_sessions[token] = {
+            'email': email,
+            'iq': iq_session,
+            'created_at': time.time(),
+            'last_activity': time.time(),
+            'gestor_riesgo': None
+        }
+        session_tokens[email] = token
+        print("✅ Sesión restaurada")
+        return active_sessions[token]
     
     @staticmethod
     def get_session(token):
@@ -60,7 +108,11 @@ class SessionManager:
             
             session['last_activity'] = time.time()
             return session
-        return None
+        try:
+            return SessionManager._restore_session(token)
+        except Exception as e:
+            print(f"❌ No se pudo restaurar sesión: {e}")
+            return None
     
     @staticmethod
     def delete_session(token):
@@ -264,14 +316,8 @@ def ejecutar_bot_servidor():
             print(f"⏰ Próxima operación: {time.strftime('%H:%M:%S', time.localtime(siguiente_ciclo))}")
             print(f"{'='*60}")
             
-            # 🔥 VERIFICAR STOP LOSS DIARIO
-            stop_loss_diario = bot_config.get('stop_loss_diario', 15)
-            if (bot_stats['ganancia_total'] < -abs(stop_loss_diario) and 
-                bot_stats['operaciones_ejecutadas'] > 0):
-                print(f"🛑 STOP LOSS DIARIO ACTIVADO: ${bot_stats['ganancia_total']:.2f}")
-                print("🔴 El bot se detendrá automáticamente")
-                database.detener_bot_servidor()
-                break
+            # Stop / racha: operar.py ya bloquea. Si viene STOP_LOSS, apagar el loop 24/7.
+            stop_loss_diario = bot_config.get('stop_loss_diario', 5)
             
             # 🔥 EJECUTAR OPERACIÓN
             resultado = ejecutar_operacion(
@@ -282,8 +328,8 @@ def ejecutar_bot_servidor():
                 forzar_operacion=False,
                 config_riesgo={
                     'riesgo_porcentaje': bot_config.get('riesgo_porcentaje', 2.0),
-                    'max_perdidas_consecutivas': bot_config.get('max_perdidas_consecutivas', 3),
-                    'stop_loss_diario': bot_config.get('stop_loss_diario', 15),
+                    'max_perdidas_consecutivas': bot_config.get('max_perdidas_consecutivas', 4),
+                    'stop_loss_diario': bot_config.get('stop_loss_diario', 5),
                     'monto_maximo': bot_config.get('monto_maximo', 10)
                 }
             )
@@ -298,6 +344,14 @@ def ejecutar_bot_servidor():
             }
             database.guardar_ultima_operacion_bot(ultima_operacion)
             
+            if resultado.get('decision') in ('STOP_LOSS',) or (resultado.get('estadisticas_riesgo') or {}).get('bloqueado'):
+                print(f"🛑 Riesgo: bot detenido ({resultado.get('razon')})")
+                database.detener_bot_servidor()
+                bot_stats['ultima_operacion_timestamp'] = time.time()
+                database.actualizar_estadisticas_bot(bot_stats)
+                database.agregar_operacion(resultado)
+                break
+
             if resultado.get('ejecutado'):
                 bot_stats['operaciones_exitosas'] += 1
                 if resultado.get('resultado_trade') and resultado['resultado_trade'].get('finalizada'):
@@ -683,7 +737,7 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                     
                     modo = config.get('modo', 'demo')
                     monto = config.get('monto')
-                    ejecutar_auto = config.get('ejecutar_auto', False)
+                    ejecutar_auto = config.get('ejecutar_auto', True)
                     forzar_operacion = config.get('forzar_operacion', False)
                     
                     print(f"\n{'='*70}")
@@ -705,8 +759,8 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                         forzar_operacion=forzar_operacion,
                         config_riesgo={
                             'riesgo_porcentaje': config.get('riesgo_porcentaje', 2.0),
-                            'max_perdidas_consecutivas': config.get('max_perdidas_consecutivas', 3),
-                            'stop_loss_diario': config.get('stop_loss_diario', 15),
+                            'max_perdidas_consecutivas': config.get('max_perdidas_consecutivas', 4),
+                            'stop_loss_diario': config.get('stop_loss_diario', 5),
                             'monto_maximo': config.get('monto_maximo', 10)
                         }
                     )
