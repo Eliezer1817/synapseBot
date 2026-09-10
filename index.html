@@ -328,7 +328,102 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
-.dash-container { max-width: 1200px; margin: 0 auto; }
+.dash-container { max-width: 1280px; margin: 0 auto; }
+.dash-shell {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 1.2rem;
+  align-items: start;
+}
+.dash-nav {
+  position: sticky;
+  top: 1rem;
+  background: linear-gradient(155deg, rgba(255,255,255,0.06), rgba(12,12,18,0.45) 50%, rgba(5,5,10,0.5));
+  backdrop-filter: blur(28px) saturate(1.6); -webkit-backdrop-filter: blur(28px) saturate(1.6);
+  border: 1px solid rgba(255,170,100,0.22);
+  border-radius: 18px;
+  padding: 0.9rem;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.45);
+}
+.dash-nav-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  color: rgba(255,255,255,0.4);
+  margin: 0.2rem 0.5rem 0.8rem;
+}
+.dash-nav-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  text-align: left;
+  padding: 0.75rem 0.8rem;
+  margin-bottom: 0.35rem;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: rgba(255,255,255,0.72);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.dash-nav-btn:hover {
+  background: rgba(255,90,0,0.08);
+  border-color: rgba(255,90,0,0.2);
+  color: #fff;
+}
+.dash-nav-btn.active {
+  background: rgba(255,90,0,0.14);
+  border-color: rgba(255,150,90,0.4);
+  color: var(--neon);
+  box-shadow: 0 0 18px rgba(255,90,0,0.12);
+}
+.dash-nav-ico { width: 1.1rem; opacity: 0.9; }
+.dash-main { min-width: 0; }
+.dash-section { display: none; }
+.dash-section.active { display: block; animation: fadeInDash 0.35s ease; }
+.section-card {
+  background: linear-gradient(155deg, rgba(255,255,255,0.06), rgba(12,12,18,0.4) 50%, rgba(5,5,10,0.45));
+  backdrop-filter: blur(28px) saturate(1.6); -webkit-backdrop-filter: blur(28px) saturate(1.6);
+  border: 1px solid rgba(255,170,100,0.22);
+  border-radius: 18px;
+  padding: 1.5rem;
+  margin-bottom: 1.2rem;
+  box-shadow: 0 28px 60px rgba(0,0,0,0.5), 0 0 40px rgba(255,90,0,0.08);
+  position: relative;
+}
+.section-card::after {
+  content: ''; position: absolute; top: 0; left: 12%; right: 12%; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,180,120,0.85), var(--neon), transparent);
+  box-shadow: 0 0 12px var(--neon-glow);
+}
+.section-lead {
+  font-size: 0.72rem;
+  color: rgba(255,255,255,0.45);
+  margin: -0.4rem 0 1.1rem;
+  letter-spacing: 0.03em;
+}
+@media (max-width: 900px) {
+  .dash-shell { grid-template-columns: 1fr; }
+  .dash-nav {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.35rem;
+    padding: 0.7rem;
+  }
+  .dash-nav-title { grid-column: 1 / -1; margin-bottom: 0.3rem; }
+  .dash-nav-btn { margin-bottom: 0; font-size: 0.68rem; padding: 0.65rem 0.45rem; justify-content: center; }
+  .dash-nav-btn span.label-full { display: none; }
+  .dash-nav-btn span.label-short { display: inline; }
+}
+@media (min-width: 901px) {
+  .dash-nav-btn span.label-short { display: none; }
+}
+
 
 /* Top Bar Dashboard */
 .top-bar-dash {
@@ -851,150 +946,212 @@ input[type="range"]::-webkit-slider-thumb {
         </div>
       </div>
       <div class="dash-actions">
-        <button class="btn-dash" onclick="resetRiesgo()">🔄 RESET RIESGO</button>
+        <button class="btn-dash" onclick="showDashSection('riesgo'); resetRiesgo()">🔄 RESET RIESGO</button>
         <button class="btn-dash danger" onclick="logout()">⏻ DESCONECTAR</button>
       </div>
     </div>
 
-    <!-- Stats -->
-    <div class="stats-grid">
-      <div class="stat-card"><div class="stat-label">Balance Total</div><div class="stat-value" id="totalBalance">$0.00</div></div>
-      <div class="stat-card"><div class="stat-label">Operaciones</div><div class="stat-value" id="tradesCount">0</div></div>
-      <div class="stat-card"><div class="stat-label">Profit / Loss</div><div class="stat-value" id="profitLoss">$0.00</div></div>
-      <div class="stat-card"><div class="stat-label">Win Rate</div><div class="stat-value" id="winRate">0%</div></div>
-    </div>
+    <div class="dash-shell">
+      <nav class="dash-nav" aria-label="Menú del dashboard">
+        <div class="dash-nav-title">MENÚ</div>
+        <button type="button" class="dash-nav-btn active" data-section="resumen" onclick="showDashSection('resumen')">
+          <span class="dash-nav-ico">◈</span>
+          <span class="label-full">Resumen</span><span class="label-short">Res</span>
+        </button>
+        <button type="button" class="dash-nav-btn" data-section="operar" onclick="showDashSection('operar')">
+          <span class="dash-nav-ico">⚡</span>
+          <span class="label-full">Operar</span><span class="label-short">Op</span>
+        </button>
+        <button type="button" class="dash-nav-btn" data-section="nucleo" onclick="showDashSection('nucleo')">
+          <span class="dash-nav-ico">◉</span>
+          <span class="label-full">Núcleo 24/7</span><span class="label-short">24/7</span>
+        </button>
+        <button type="button" class="dash-nav-btn" data-section="riesgo" onclick="showDashSection('riesgo')">
+          <span class="dash-nav-ico">◎</span>
+          <span class="label-full">Riesgo</span><span class="label-short">Risk</span>
+        </button>
+        <button type="button" class="dash-nav-btn" data-section="cuentas" onclick="showDashSection('cuentas')">
+          <span class="dash-nav-ico">▣</span>
+          <span class="label-full">Cuentas</span><span class="label-short">$</span>
+        </button>
+        <button type="button" class="dash-nav-btn" data-section="historial" onclick="showDashSection('historial')">
+          <span class="dash-nav-ico">☰</span>
+          <span class="label-full">Historial</span><span class="label-short">Hist</span>
+        </button>
+      </nav>
 
-    <!-- Control Panel -->
-    <div class="control-panel">
-      <h2 class="panel-title">🎮 PANEL DE CONTROL</h2>
-      <div class="control-grid">
-        <div class="control-item">
-          <label class="control-label">Tipo de Cuenta</label>
-          <select id="accountMode" class="control-select">
-            <option value="demo">DEMO (Práctica)</option>
-            <option value="real">REAL</option>
-          </select>
-        </div>
-        <div class="control-item">
-          <label class="control-label">Intervalo de Análisis (min)</label>
-          <input type="number" id="intervalMinutes" class="control-input" value="5" min="1" max="60" step="1">
-        </div>
-        <div class="control-item">
-          <label class="control-label">Tipo de Monto</label>
-          <select id="tipoMonto" class="control-select" onchange="toggleTipoMonto()">
-            <option value="auto">🤖 Automático</option>
-            <option value="fijo">💰 Monto Fijo</option>
-          </select>
-        </div>
-        <div class="control-item" id="montoFijoContainer" style="display: none;">
-          <label class="control-label">Monto Fijo ($)</label>
-          <input type="number" id="tradeAmount" class="control-input" value="1" min="1" step="1">
-        </div>
-      </div>
-
-      <!-- Risk Config -->
-      <div class="risk-config-section">
-        <h3>🎯 GESTIÓN INTELIGENTE DE RIESGO</h3>
-        <div class="config-help">💡 EMA/MACD/BB · riesgo fijo 1–2% · sin martingala · sin take profit · SL diario 5%</div>
-        <div class="control-grid">
-          <div class="control-item">
-            <label class="control-label">% Riesgo por Operación (1–2%)</label>
-            <div class="slider-container">
-              <input type="range" id="riesgoPorcentaje" min="1" max="2" step="0.1" value="2">
-              <span class="slider-value" id="riesgoValue">2%</span>
+      <div class="dash-main">
+        <!-- RESUMEN -->
+        <section id="sec-resumen" class="dash-section active">
+          <div class="section-card">
+            <h2 class="panel-title">◈ RESUMEN</h2>
+            <p class="section-lead">Vista rápida del estado de la sesión.</p>
+            <div class="stats-grid">
+              <div class="stat-card"><div class="stat-label">Balance Total</div><div class="stat-value" id="totalBalance">$0.00</div></div>
+              <div class="stat-card"><div class="stat-label">Operaciones</div><div class="stat-value" id="tradesCount">0</div></div>
+              <div class="stat-card"><div class="stat-label">Profit / Loss</div><div class="stat-value" id="profitLoss">$0.00</div></div>
+              <div class="stat-card"><div class="stat-label">Win Rate</div><div class="stat-value" id="winRate">0%</div></div>
             </div>
           </div>
-          <div class="control-item">
-            <label class="control-label">Máx. pérdidas seguidas (3–4)</label>
-            <input type="number" id="maxPerdidasConsecutivas" class="control-input" value="4" min="3" max="4">
-          </div>
-          <div class="control-item">
-            <label class="control-label">Stop Loss Diario (%)</label>
-            <div class="slider-container">
-              <input type="range" id="stopLossDiario" min="3" max="10" step="1" value="5">
-              <span class="slider-value" id="stopLossValue">5%</span>
+        </section>
+
+        <!-- OPERAR -->
+        <section id="sec-operar" class="dash-section">
+          <div class="section-card">
+            <h2 class="panel-title">⚡ OPERAR</h2>
+            <p class="section-lead">Configuración de cuenta/monto y disparo manual de señal.</p>
+            <div class="control-grid">
+              <div class="control-item">
+                <label class="control-label">Tipo de Cuenta</label>
+                <select id="accountMode" class="control-select">
+                  <option value="demo">DEMO (Práctica)</option>
+                  <option value="real">REAL</option>
+                </select>
+              </div>
+              <div class="control-item">
+                <label class="control-label">Intervalo de Análisis (min)</label>
+                <input type="number" id="intervalMinutes" class="control-input" value="5" min="1" max="60" step="1">
+              </div>
+              <div class="control-item">
+                <label class="control-label">Tipo de Monto</label>
+                <select id="tipoMonto" class="control-select" onchange="toggleTipoMonto()">
+                  <option value="auto">🤖 Automático</option>
+                  <option value="fijo">💰 Monto Fijo</option>
+                </select>
+              </div>
+              <div class="control-item" id="montoFijoContainer" style="display: none;">
+                <label class="control-label">Monto Fijo ($)</label>
+                <input type="number" id="tradeAmount" class="control-input" value="1" min="1" step="1">
+              </div>
+            </div>
+            <div class="action-buttons" style="margin-top:1.2rem">
+              <button class="btn-action orange" id="manualBtn" onclick="operacionManual()">
+                <span class="ico"><svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></span>
+                <span class="txt"><b>Ejecutar señal</b><span>Disparo manual</span></span>
+              </button>
             </div>
           </div>
-          <div class="control-item">
-            <label class="control-label">Monto Máximo por Operación ($)</label>
-            <input type="number" id="montoMaximo" class="control-input" value="10" min="2" max="50" step="1">
+        </section>
+
+        <!-- NUCLEO -->
+        <section id="sec-nucleo" class="dash-section">
+          <div class="section-card">
+            <h2 class="panel-title">◉ NÚCLEO 24/7</h2>
+            <p class="section-lead">Daemon automático en servidor: estado, fase y control.</p>
+            <div class="action-buttons">
+              <button class="btn-action blue" id="serverBotBtn" onclick="iniciarBotServidor()">
+                <span class="ico"><svg viewBox="0 0 24 24"><path d="M12 3v4"/><circle cx="12" cy="14" r="7"/><path d="M9 14h6M12 11v6"/></svg></span>
+                <span class="txt"><b>Núcleo 24/7</b><span>Daemon en servidor</span></span>
+              </button>
+              <button class="btn-action red" id="stopServerBotBtn" onclick="detenerBotServidor()">
+                <span class="ico"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></svg></span>
+                <span class="txt"><b>Abortar núcleo</b><span>Detener daemon</span></span>
+              </button>
+            </div>
+            <div id="serverBotStatus" class="server-status" style="margin-top:1rem">
+              <div class="server-status-header">
+                <div class="server-status-left">
+                  <div class="server-status-dot"></div>
+                  <strong class="server-status-title" id="serverStatusTitle">NÚCLEO 24/7</strong>
+                </div>
+                <span class="badge-state off" id="serverStateBadge">DETENIDO</span>
+              </div>
+              <div class="tele-activity" id="serverActivity">El núcleo está detenido. Iniciá 24/7 para ver qué hace en vivo.</div>
+              <div class="tele-grid">
+                <div class="tele-cell"><span class="k">Fase</span><span class="v" id="serverPhase">DETENIDO</span></div>
+                <div class="tele-cell"><span class="k">Modo</span><span class="v" id="serverMode">—</span></div>
+                <div class="tele-cell"><span class="k">Última señal</span><span class="v" id="serverLastDecision">—</span></div>
+                <div class="tele-cell"><span class="k">Score</span><span class="v" id="serverLastScore">—</span></div>
+                <div class="tele-cell"><span class="k">Último ciclo</span><span class="v" id="lastServerOperation">—</span></div>
+                <div class="tele-cell"><span class="k">Próximo ciclo</span><span class="v" id="serverCountdown">—</span></div>
+                <div class="tele-cell"><span class="k">Intervalo</span><span class="v"><span id="serverInterval">5</span> min</span></div>
+                <div class="tele-cell"><span class="k">Análisis / trades</span><span class="v" id="serverCycleStats">0 / 0</span></div>
+              </div>
+              <div class="tele-reason" id="serverLastReason">El núcleo está detenido. Iniciá 24/7 para ver el pulso en vivo.</div>
+              <div class="tele-heartbeat" id="serverHeartbeat">Sin heartbeat</div>
+              <div class="tele-bars" id="serverBars"></div>
+            </div>
           </div>
-        </div>
-        <div class="risk-monitor">
-          <h4>📈 MONITOR DE RIESGO EN TIEMPO REAL</h4>
-          <div class="risk-metrics">
-            <div class="risk-metric"><span class="metric-label">Monto Sugerido</span><span class="metric-value" id="montoSugerido">$0.00</span></div>
-            <div class="risk-metric"><span class="metric-label">Racha Actual</span><span class="metric-value" id="rachaActual">0</span></div>
-            <div class="risk-metric"><span class="metric-label">Riesgo Actual</span><span class="metric-value" id="riesgoActual">2.0%</span></div>
-            <div class="risk-metric"><span class="metric-label">Profit Hoy</span><span class="metric-value" id="profitHoy">$0.00</span></div>
+        </section>
+
+        <!-- RIESGO -->
+        <section id="sec-riesgo" class="dash-section">
+          <div class="section-card">
+            <h2 class="panel-title">◎ RIESGO</h2>
+            <p class="section-lead">Límites y monitor en tiempo real.</p>
+            <div class="risk-config-section" style="margin-top:0">
+              <h3>🎯 GESTIÓN INTELIGENTE DE RIESGO</h3>
+              <div class="config-help">💡 EMA/MACD/BB · riesgo fijo 1–2% · sin martingala · sin take profit · SL diario 5%</div>
+              <div class="control-grid">
+                <div class="control-item">
+                  <label class="control-label">% Riesgo por Operación (1–2%)</label>
+                  <div class="slider-container">
+                    <input type="range" id="riesgoPorcentaje" min="1" max="2" step="0.1" value="2">
+                    <span class="slider-value" id="riesgoValue">2%</span>
+                  </div>
+                </div>
+                <div class="control-item">
+                  <label class="control-label">Máx. pérdidas seguidas (3–4)</label>
+                  <input type="number" id="maxPerdidasConsecutivas" class="control-input" value="4" min="3" max="4">
+                </div>
+                <div class="control-item">
+                  <label class="control-label">Stop Loss Diario (%)</label>
+                  <div class="slider-container">
+                    <input type="range" id="stopLossDiario" min="3" max="10" step="1" value="5">
+                    <span class="slider-value" id="stopLossValue">5%</span>
+                  </div>
+                </div>
+                <div class="control-item">
+                  <label class="control-label">Monto Máximo por Operación ($)</label>
+                  <input type="number" id="montoMaximo" class="control-input" value="10" min="2" max="50" step="1">
+                </div>
+              </div>
+              <div class="risk-monitor">
+                <h4>📈 MONITOR DE RIESGO EN TIEMPO REAL</h4>
+                <div class="risk-metrics">
+                  <div class="risk-metric"><span class="metric-label">Monto Sugerido</span><span class="metric-value" id="montoSugerido">$0.00</span></div>
+                  <div class="risk-metric"><span class="metric-label">Racha Actual</span><span class="metric-value" id="rachaActual">0</span></div>
+                  <div class="risk-metric"><span class="metric-label">Riesgo Actual</span><span class="metric-value" id="riesgoActual">2.0%</span></div>
+                  <div class="risk-metric"><span class="metric-label">Profit Hoy</span><span class="metric-value" id="profitHoy">$0.00</span></div>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        </section>
 
-      <!-- Action Buttons -->
-      <div class="action-buttons">
-        <button class="btn-action blue" id="serverBotBtn" onclick="iniciarBotServidor()">
-          <span class="ico"><svg viewBox="0 0 24 24"><path d="M12 3v4"/><circle cx="12" cy="14" r="7"/><path d="M9 14h6M12 11v6"/></svg></span>
-          <span class="txt"><b>Núcleo 24/7</b><span>Daemon en servidor</span></span>
-        </button>
-        <button class="btn-action orange" id="manualBtn" onclick="operacionManual()">
-          <span class="ico"><svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></span>
-          <span class="txt"><b>Ejecutar señal</b><span>Disparo manual</span></span>
-        </button>
-        <button class="btn-action red" id="stopServerBotBtn" onclick="detenerBotServidor()">
-          <span class="ico"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></svg></span>
-          <span class="txt"><b>Abortar núcleo</b><span>Detener daemon</span></span>
-        </button>
-      </div>
-
-      <!-- Server Bot Status -->
-      <div id="serverBotStatus" class="server-status">
-        <div class="server-status-header">
-          <div class="server-status-left">
-            <div class="server-status-dot"></div>
-            <strong class="server-status-title" id="serverStatusTitle">NÚCLEO 24/7</strong>
+        <!-- CUENTAS -->
+        <section id="sec-cuentas" class="dash-section">
+          <div class="section-card">
+            <h2 class="panel-title">▣ CUENTAS</h2>
+            <p class="section-lead">Saldos REAL y DEMO de IQ Option.</p>
+            <div class="accounts-section" style="margin-bottom:0">
+              <div class="account-card">
+                <div class="account-header"><span class="account-icon">💰</span><h3 class="account-title">CUENTA REAL</h3></div>
+                <div class="account-balance" id="realBalance">$0.00</div>
+                <div class="account-id">ID: <span id="realId">-</span></div>
+              </div>
+              <div class="account-card">
+                <div class="account-header"><span class="account-icon"></span><h3 class="account-title">CUENTA DEMO</h3></div>
+                <div class="account-balance" id="demoBalance">$0.00</div>
+                <div class="account-id">ID: <span id="demoId">-</span></div>
+              </div>
+            </div>
           </div>
-          <span class="badge-state off" id="serverStateBadge">DETENIDO</span>
-        </div>
-        <div class="tele-activity" id="serverActivity">El núcleo está detenido. Iniciá 24/7 para ver qué hace en vivo.</div>
-        <div class="tele-grid">
-          <div class="tele-cell"><span class="k">Fase</span><span class="v" id="serverPhase">DETENIDO</span></div>
-          <div class="tele-cell"><span class="k">Modo</span><span class="v" id="serverMode">—</span></div>
-          <div class="tele-cell"><span class="k">Última señal</span><span class="v" id="serverLastDecision">—</span></div>
-          <div class="tele-cell"><span class="k">Score</span><span class="v" id="serverLastScore">—</span></div>
-          <div class="tele-cell"><span class="k">Último ciclo</span><span class="v" id="lastServerOperation">—</span></div>
-          <div class="tele-cell"><span class="k">Próximo ciclo</span><span class="v" id="serverCountdown">—</span></div>
-          <div class="tele-cell"><span class="k">Intervalo</span><span class="v"><span id="serverInterval">5</span> min</span></div>
-          <div class="tele-cell"><span class="k">Análisis / trades</span><span class="v" id="serverCycleStats">0 / 0</span></div>
-        </div>
-        <div class="tele-reason" id="serverLastReason">El núcleo está detenido. Iniciá 24/7 para ver el pulso en vivo.</div>
-        <div class="tele-heartbeat" id="serverHeartbeat">Sin heartbeat</div>
-        <div class="tele-bars" id="serverBars"></div>
-      </div>
-    </div>
+        </section>
 
-    <!-- Accounts -->
-    <div class="accounts-section">
-      <div class="account-card">
-        <div class="account-header"><span class="account-icon">💰</span><h3 class="account-title">CUENTA REAL</h3></div>
-        <div class="account-balance" id="realBalance">$0.00</div>
-        <div class="account-id">ID: <span id="realId">-</span></div>
-      </div>
-      <div class="account-card">
-        <div class="account-header"><span class="account-icon"></span><h3 class="account-title">CUENTA DEMO</h3></div>
-        <div class="account-balance" id="demoBalance">$0.00</div>
-        <div class="account-id">ID: <span id="demoId">-</span></div>
-      </div>
-    </div>
-
-    <!-- History -->
-    <div class="history-section">
-      <div class="history-header">
-        <h2 class="panel-title">📊 HISTORIAL DE OPERACIONES</h2>
-        <button class="btn-clear" onclick="clearHistory()">LIMPIAR</button>
-      </div>
-      <div class="trade-list" id="tradeList">
-        <div class="empty-history">No hay operaciones registradas</div>
+        <!-- HISTORIAL -->
+        <section id="sec-historial" class="dash-section">
+          <div class="history-section" style="margin-bottom:0">
+            <div class="history-header">
+              <h2 class="panel-title">☰ HISTORIAL</h2>
+              <button class="btn-clear" onclick="clearHistory()">LIMPIAR</button>
+            </div>
+            <p class="section-lead">Operaciones registradas en esta sesión / servidor.</p>
+            <div class="trade-list" id="tradeList">
+              <div class="empty-history">No hay operaciones registradas</div>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   </div>
@@ -1230,6 +1387,20 @@ for(let i=0;i<40;i++) particles.push(new P());
 })();
 
 // ==================== DASHBOARD LOGIC (100% INTACT) ====================
+function showDashSection(id) {
+  var sections = document.querySelectorAll('.dash-section');
+  sections.forEach(function(sec) { sec.classList.toggle('active', sec.id === 'sec-' + id); });
+  document.querySelectorAll('.dash-nav-btn').forEach(function(btn) {
+    btn.classList.toggle('active', btn.getAttribute('data-section') === id);
+  });
+  try { localStorage.setItem('synapse_dash_section', id); } catch (e) {}
+}
+function restoreDashSection() {
+  var id = 'resumen';
+  try { id = localStorage.getItem('synapse_dash_section') || 'resumen'; } catch (e) {}
+  showDashSection(id);
+}
+
 const appState = {
   sessionToken: null,
   userData: null,
@@ -1283,6 +1454,7 @@ function restoreDashboard(userData) {
   
   document.getElementById('landingPage').classList.add('landing-hidden');
   document.getElementById('dashboard').classList.remove('hidden');
+  restoreDashSection();
   mostrarPanelNucleo();
   iniciarMonitorServidor(true);
 }
@@ -1344,6 +1516,7 @@ async function login() {
 
     document.getElementById('landingPage').classList.add('landing-hidden');
     document.getElementById('dashboard').classList.remove('hidden');
+    restoreDashSection();
     mostrarPanelNucleo();
     iniciarMonitorServidor(true);
 
