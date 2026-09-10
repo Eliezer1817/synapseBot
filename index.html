@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-<title>SYNAPSE_CORE · Trading Bot Dashboard</title>
+<title>SynapseBot · Trading Bot Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
@@ -268,7 +268,49 @@ body {
 .live-head .pair { color: var(--neon); font-family: 'Orbitron', sans-serif; }
 .live-head .badge { color: var(--green); display: flex; align-items: center; gap: 0.3rem; }
 .live-head .badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse-dot 1.4s ease-in-out infinite; }
-#miniChart { width: 100%; height: 110px; display: block; }
+#miniChart, #pulseChart, #candleChart { width: 100%; height: 130px; display: block; }
+
+/* Responsive landing fixes */
+html, body { overflow-x: hidden; }
+.story, .dashboard, .chapter, .dash-container, #landingPage { max-width: 100vw; }
+.story-block, .story-glass, .live-box, .evidence-card, .risk-banner, .panel {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.story-title { word-break: break-word; overflow-wrap: anywhere; }
+.dual-live { width: 100%; max-width: 100%; }
+.live-box { overflow: hidden; margin-top: 0.75rem; }
+#miniChart, #pulseChart, #candleChart {
+  width: 100% !important;
+  max-width: 100%;
+  height: 130px;
+  display: block;
+}
+.live-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.live-metrics .metric { min-width: 0; }
+.live-metrics .mv { font-size: clamp(0.7rem, 3.5vw, 0.95rem); }
+.chapter-nav {
+  right: 0.35rem;
+  z-index: 30;
+}
+.chapter {
+  padding-left: 1rem;
+  padding-right: 1.6rem;
+  overflow-x: hidden;
+}
+.story-block { width: min(560px, 100%); }
+@media (max-width: 640px) {
+  .chapter-hero { padding-bottom: 1.5rem; }
+  .panel { width: min(100%, 420px); padding: 1.1rem; }
+  .headline { font-size: clamp(1.35rem, 7vw, 1.8rem); }
+  .story-title { font-size: clamp(1.35rem, 7vw, 1.85rem); }
+  .dual-live { grid-template-columns: 1fr; }
+  .stats-row { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .chapter-nav button { width: 8px; height: 8px; }
+  .sound-btn { left: 0.6rem; bottom: 0.8rem; }
+  .evidence-card p, .risk-banner p, .risk-banner li, .story-text { font-size: 0.7rem; }
+}
+
 .live-metrics { display: grid; grid-template-columns: repeat(3,1fr); gap: 0.5rem; margin-top: 0.7rem; }
 .metric { text-align: center; padding: 0.45rem; background: rgba(255,255,255,0.03); border-radius: 8px; }
 .metric .mv { font-family: 'Orbitron', sans-serif; font-size: 0.8rem; color: var(--neon); }
@@ -825,10 +867,10 @@ input[type="range"]::-webkit-slider-thumb {
     <!-- CH 0: LOGIN -->
     <section class="chapter chapter-hero" data-chapter="0" data-video-bright="0.9" data-video-y="0" id="acceso">
       <div class="top-bar">
-        <div class="logo-mark"><span class="dot"></span> SYNAPSE_CORE</div>
+        <div class="logo-mark"><span class="dot"></span> SynapseBot</div>
       </div>
       <div class="panel" id="panel">
-        <div class="brand">SYNAPSE_CORE</div>
+        <div class="brand">SynapseBot</div>
         <h1 class="headline">TRADING BOT<br>ACCESS <span class="accent">TERMINAL</span></h1>
         <p class="tagline">IQ Option · EMA/MACD/BB · Bot autónomo 24/7</p>
         <div class="status-line">
@@ -902,11 +944,11 @@ input[type="range"]::-webkit-slider-thumb {
       <div class="story-block story-glass">
         <div class="chapter-label">Capítulo 04 · Señal en vivo</div>
         <h2 class="story-title">Lo que ve la<br><span class="hl">estrategia</span></h2>
-        <p class="story-text">Misma estética del motor visual: precio en movimiento, score de confluencia y decisión CALL / PUT / SKIP.</p>
+        <p class="story-text">Velas japonesas en movimiento, score de confluencia y decisión CALL / PUT / SKIP — misma estética del motor.</p>
         <div class="dual-live">
           <div class="live-box">
             <div class="live-head"><span class="pair">EURUSD-OTC · 5M</span><span class="badge">LIVE</span></div>
-            <canvas id="miniChart"></canvas>
+            <canvas id="miniChart" aria-label="Velas japonesas"></canvas>
             <div class="live-metrics">
               <div class="metric"><div class="mv" id="mRsi">—</div><div class="ml">EMA gap</div></div>
               <div class="metric"><div class="mv" id="mProb">—</div><div class="ml">Score 4/4</div></div>
@@ -915,7 +957,7 @@ input[type="range"]::-webkit-slider-thumb {
           </div>
           <div class="live-box">
             <div class="live-head"><span class="pair">PULSO DEL MOTOR</span><span class="badge">LIVE</span></div>
-            <canvas id="pulseChart"></canvas>
+            <canvas id="pulseChart" aria-label="Pulso MACD"></canvas>
             <div class="live-metrics">
               <div class="metric"><div class="mv" id="mMacd">—</div><div class="ml">MACD hist</div></div>
               <div class="metric"><div class="mv" id="mBb">—</div><div class="ml">BB width</div></div>
@@ -930,7 +972,7 @@ input[type="range"]::-webkit-slider-thumb {
     <section class="chapter" data-chapter="5" data-video-bright="0.5" data-video-y="18" id="ch5">
       <div class="story-block story-glass">
         <div class="chapter-label">Capítulo 05 · Mercado</div>
-        <h2 class="story-title">Por qué crece el<br><span class="hl">algo trading</span></h2>
+        <h2 class="story-title">Por qué crece el<br><span class="hl">trading algorítmico</span></h2>
         <p class="story-text">En mercados institucionales el trading automatizado ya es estándar: velocidad, disciplina de reglas y control de ejecución. Eso no garantiza ganancias en binarias OTC — sí explica por qué el enfoque algorítmico se usa cada vez más.</p>
         <div class="evidence-grid">
           <div class="evidence-card">
@@ -964,23 +1006,17 @@ input[type="range"]::-webkit-slider-thumb {
       </div>
     </section>
 
-    <!-- CH 7 -->
+        <!-- CH 7 -->
     <section class="chapter" data-chapter="7" data-video-bright="0.7" data-video-y="5">
       <div class="story-block story-glass">
-        <div class="chapter-label">Capítulo 07 · Arquitectura</div>
-        <h2 class="story-title">Cómo está<br><span class="hl">construido</span></h2>
-        <p class="story-text" style="text-align:left">
-          <strong style="color:#fff">server.py</strong> — HTTP + sesiones + bot 24/7<br>
-          <strong style="color:#fff">operar.py</strong> — EMA/MACD/BB, riesgo y trades<br>
-          <strong style="color:#fff">database.py</strong> — persistencia y estado vivo del núcleo<br>
-          <strong style="color:#fff">index.html</strong> — landing + dashboard por secciones
-        </p>
-        <div class="risk-banner">
+        <div class="chapter-label">Capítulo 07 · Riesgo</div>
+        <h2 class="story-title">Antes de<br><span class="hl">conectar</span></h2>
+        <div class="risk-banner" style="margin-top:0">
           <h4>⚠ Riesgo real · prueba en proceso</h4>
           <p>El trading (y las opciones binarias) puede generar <strong style="color:#fff">pérdidas totales del capital</strong>. SynapseBot es un proyecto en desarrollo / prueba: no es asesoramiento financiero ni promesa de rentabilidad. Usá DEMO, entendé la estrategia y operá solo con dinero que puedas perder.</p>
           <ul>
             <li>Puede haber rachas de SKIP o de pérdidas.</li>
-            <li>Mercados OTC/binarios son de alto riesgo y no equivalen al algo institucional de bolsas.</li>
+            <li>Mercados OTC/binarios son de alto riesgo y no equivalen al trading algorítmico institucional de bolsas.</li>
             <li>Vos sos responsable de credenciales, modo REAL/DEMO y capital.</li>
           </ul>
         </div>
@@ -992,7 +1028,7 @@ input[type="range"]::-webkit-slider-thumb {
   <footer class="site-footer">
     <div class="footer-inner">
       <div class="footer-brand">
-        <div class="logo">SYNAPSE_CORE</div>
+        <div class="logo">SynapseBot</div>
         <p>Bot de trading algorítmico para IQ Option. Estrategia EMA/MACD/BB, riesgo adaptativo y ejecución 24/7. Proyecto en prueba — alto riesgo de pérdida.</p>
         <div class="socials">
           <a href="https://x.com/CiancioRen53256" target="_blank" rel="noopener" title="X">𝕏</a>
@@ -1002,12 +1038,12 @@ input[type="range"]::-webkit-slider-thumb {
       </div>
       <div class="status-box">
         <div class="s-label">Estado del sistema</div>
-        <div class="s-name">SYNAPSE_CORE</div>
+        <div class="s-name">SynapseBot</div>
         <div class="s-online">ONLINE</div>
         <div class="s-sub">Todos los sistemas operativos</div>
       </div>
     </div>
-    <div class="footer-bottom">© 2026 SYNAPSE_CORE · Eliezer1817</div>
+    <div class="footer-bottom">© 2026 SynapseBot · Eliezer1817</div>
   </footer>
   <button class="sound-btn" id="soundBtn">SONIDO</button>
   <div id="ytDock">
@@ -1395,94 +1431,141 @@ document.getElementById('toggleKey').onclick = () => {
   document.getElementById('toggleKey').textContent = is ? '🔒' : '👁';
 };
 
-// Mini Chart + pulse chart
+// Candlestick + pulse charts
 const mc = document.getElementById('miniChart');
 const pc = document.getElementById('pulseChart');
 const mctx = mc ? mc.getContext('2d') : null;
 const pctx = pc ? pc.getContext('2d') : null;
-let prices = [], pulse = [], rsi = 52, prob = 0.5, signal = 'SKIP';
-let macdHist = 0, bbWidth = 0.0012, filtro = 'OK';
+let candles = [], pulse = [];
+let rsi = 52, signal = 'SKIP', macdHist = 0, bbWidth = 0.0012, filtro = 'OK';
 function _sizeCanvas(canvas, ctx, h) {
   if (!canvas || !ctx) return;
   const dpr = devicePixelRatio || 1;
-  canvas.width = canvas.offsetWidth * dpr; canvas.height = h * dpr;
-  ctx.setTransform(dpr,0,0,dpr,0,0);
+  const w = Math.max(1, canvas.clientWidth || canvas.offsetWidth || 300);
+  canvas.width = Math.floor(w * dpr);
+  canvas.height = Math.floor(h * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
-function initChart() {
-  _sizeCanvas(mc, mctx, 110);
-  _sizeCanvas(pc, pctx, 110);
-  prices = []; pulse = []; let p = 1.085; let q = 0;
-  for (let i=0;i<48;i++) {
-    p += (Math.random()-0.48)*0.0015;
-    prices.push(p);
-    q = q*0.85 + (Math.random()-0.5)*0.4;
-    pulse.push(q);
+function _seedCandles() {
+  candles = [];
+  let c = 1.085;
+  for (let i = 0; i < 28; i++) {
+    const o = c;
+    const ch = (Math.random() - 0.48) * 0.0022;
+    const cl = o + ch;
+    const hi = Math.max(o, cl) + Math.random() * 0.0009;
+    const lo = Math.min(o, cl) - Math.random() * 0.0009;
+    candles.push({ o, h: hi, l: lo, c: cl });
+    c = cl;
   }
 }
-function _drawLine(canvas, ctx, series, stroke) {
-  if (!canvas || !ctx || !series.length) return;
-  const w = canvas.offsetWidth, h = 110;
-  ctx.clearRect(0,0,w,h);
-  const min = Math.min(...series), max = Math.max(...series);
-  const span = (max-min) || 1e-6;
-  ctx.beginPath();
-  series.forEach((v,i) => {
-    const x = (i/(series.length-1))*w;
-    const y = h - ((v-min)/span)*(h-16) - 8;
-    if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+function initChart() {
+  _sizeCanvas(mc, mctx, 130);
+  _sizeCanvas(pc, pctx, 130);
+  if (!candles.length) _seedCandles();
+  if (!pulse.length) {
+    pulse = [];
+    let q = 0;
+    for (let i = 0; i < 40; i++) { q = q * 0.85 + (Math.random() - 0.5) * 0.4; pulse.push(q); }
+  }
+}
+function drawCandles() {
+  if (!mc || !mctx || !candles.length) return;
+  const w = mc.clientWidth || mc.offsetWidth;
+  const h = 130;
+  mctx.clearRect(0, 0, w, h);
+  const highs = candles.map(x => x.h), lows = candles.map(x => x.l);
+  const min = Math.min(...lows), max = Math.max(...highs);
+  const span = (max - min) || 1e-6;
+  const n = candles.length;
+  const gap = 2;
+  const cw = Math.max(3, (w / n) - gap);
+  candles.forEach((k, i) => {
+    const x = i * (cw + gap) + cw / 2;
+    const yH = h - ((k.h - min) / span) * (h - 18) - 8;
+    const yL = h - ((k.l - min) / span) * (h - 18) - 8;
+    const yO = h - ((k.o - min) / span) * (h - 18) - 8;
+    const yC = h - ((k.c - min) / span) * (h - 18) - 8;
+    const up = k.c >= k.o;
+    const col = up ? '#3ddc84' : '#ff5a00';
+    mctx.strokeStyle = col;
+    mctx.fillStyle = col;
+    mctx.shadowColor = col;
+    mctx.shadowBlur = 8;
+    mctx.beginPath();
+    mctx.moveTo(x, yH);
+    mctx.lineTo(x, yL);
+    mctx.lineWidth = 1.2;
+    mctx.stroke();
+    const top = Math.min(yO, yC);
+    const bh = Math.max(2, Math.abs(yC - yO));
+    mctx.fillRect(x - cw / 2, top, cw, bh);
+    mctx.shadowBlur = 0;
   });
-  ctx.strokeStyle = stroke;
-  ctx.lineWidth = 2;
-  ctx.shadowColor = stroke;
-  ctx.shadowBlur = 12;
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-  // glow fill
-  const last = series[series.length-1];
-  const yLast = h - ((last-min)/span)*(h-16) - 8;
-  const grd = ctx.createLinearGradient(0,0,0,h);
-  grd.addColorStop(0, 'rgba(255,90,0,0.18)');
-  grd.addColorStop(1, 'rgba(255,90,0,0)');
-  ctx.lineTo(w,h); ctx.lineTo(0,h); ctx.closePath();
-  ctx.fillStyle = grd; ctx.fill();
-  ctx.beginPath();
-  ctx.arc(w-2, yLast, 3.2, 0, Math.PI*2);
-  ctx.fillStyle = '#fff';
-  ctx.shadowColor = stroke;
-  ctx.shadowBlur = 10;
-  ctx.fill();
-  ctx.shadowBlur = 0;
 }
-function drawChart() {
-  _drawLine(mc, mctx, prices, '#ff5a00');
-  _drawLine(pc, pctx, pulse, '#3ddc84');
+function drawPulse() {
+  if (!pc || !pctx || !pulse.length) return;
+  const w = pc.clientWidth || pc.offsetWidth;
+  const h = 130;
+  pctx.clearRect(0, 0, w, h);
+  const min = Math.min(...pulse), max = Math.max(...pulse);
+  const span = (max - min) || 1e-6;
+  pctx.beginPath();
+  pulse.forEach((v, i) => {
+    const x = (i / (pulse.length - 1)) * w;
+    const y = h - ((v - min) / span) * (h - 16) - 8;
+    if (i === 0) pctx.moveTo(x, y); else pctx.lineTo(x, y);
+  });
+  pctx.strokeStyle = '#3ddc84';
+  pctx.lineWidth = 2;
+  pctx.shadowColor = '#3ddc84';
+  pctx.shadowBlur = 12;
+  pctx.stroke();
+  pctx.shadowBlur = 0;
+  pctx.lineTo(w, h); pctx.lineTo(0, h); pctx.closePath();
+  const grd = pctx.createLinearGradient(0, 0, 0, h);
+  grd.addColorStop(0, 'rgba(61,220,132,0.16)');
+  grd.addColorStop(1, 'rgba(61,220,132,0)');
+  pctx.fillStyle = grd;
+  pctx.fill();
 }
+function drawChart() { drawCandles(); drawPulse(); }
 function tickChart() {
-  const last = prices[prices.length-1] || 1.085;
-  prices.push(last + (Math.random()-0.48)*0.0016);
-  if (prices.length > 48) prices.shift();
-  const pl = pulse[pulse.length-1] || 0;
-  pulse.push(pl*0.82 + (Math.random()-0.5)*0.45);
-  if (pulse.length > 48) pulse.shift();
-  rsi = Math.max(20, Math.min(80, rsi + (Math.random()-0.5)*4));
-  const score = Math.floor(Math.random()*5);
-  prob = score / 4;
-  signal = score === 4 ? (Math.random()>0.5?'CALL':'PUT') : 'SKIP';
-  macdHist = (Math.random()-0.5)*0.002;
-  bbWidth = 0.0008 + Math.random()*0.0015;
-  filtro = (Math.random()>0.15) ? 'OK' : 'SKIP';
+  const last = candles[candles.length - 1] || { c: 1.085 };
+  const o = last.c;
+  const ch = (Math.random() - 0.48) * 0.002;
+  const c = o + ch;
+  const hi = Math.max(o, c) + Math.random() * 0.0008;
+  const lo = Math.min(o, c) - Math.random() * 0.0008;
+  candles.push({ o, h: hi, l: lo, c });
+  if (candles.length > 28) candles.shift();
+  const pl = pulse[pulse.length - 1] || 0;
+  pulse.push(pl * 0.82 + (Math.random() - 0.5) * 0.45);
+  if (pulse.length > 40) pulse.shift();
+  rsi = Math.max(20, Math.min(80, rsi + (Math.random() - 0.5) * 4));
+  const score = Math.floor(Math.random() * 5);
+  signal = score === 4 ? (Math.random() > 0.5 ? 'CALL' : 'PUT') : 'SKIP';
+  macdHist = (Math.random() - 0.5) * 0.002;
+  bbWidth = 0.0008 + Math.random() * 0.0015;
+  filtro = (Math.random() > 0.15) ? 'OK' : 'SKIP';
   const emaEl = document.getElementById('mRsi');
-  if (emaEl) emaEl.textContent = ((rsi-50)/100).toFixed(3);
+  if (emaEl) emaEl.textContent = ((rsi - 50) / 100).toFixed(3);
   const sc = document.getElementById('mProb');
   if (sc) sc.textContent = score + '/4';
   const s = document.getElementById('mSignal');
-  if (s) { s.textContent = signal; s.style.color = signal==='CALL' ? 'var(--green)' : (signal==='PUT' ? 'var(--red)' : 'rgba(255,255,255,0.7)'); }
+  if (s) {
+    s.textContent = signal;
+    s.style.color = signal === 'CALL' ? 'var(--green)' : (signal === 'PUT' ? 'var(--red)' : 'rgba(255,255,255,0.7)');
+  }
   const mh = document.getElementById('mMacd');
   if (mh) mh.textContent = macdHist.toFixed(4);
   const bb = document.getElementById('mBb');
   if (bb) bb.textContent = bbWidth.toFixed(4);
   const ff = document.getElementById('mFiltro');
-  if (ff) { ff.textContent = filtro; ff.style.color = filtro==='OK' ? 'var(--green)' : 'rgba(255,255,255,0.55)'; }
+  if (ff) {
+    ff.textContent = filtro;
+    ff.style.color = filtro === 'OK' ? 'var(--green)' : 'rgba(255,255,255,0.55)';
+  }
   drawChart();
 }
 initChart(); drawChart();
