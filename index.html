@@ -198,6 +198,32 @@ body {
 }
 .story-title .hl { color: var(--neon); text-shadow: 0 0 20px var(--neon-glow); }
 .story-text { font-size: 0.8rem; color: rgba(255,255,255,0.55); line-height: 1.7; margin-bottom: 1.5rem; }
+.evidence-grid { display: grid; gap: 0.75rem; margin-top: 1rem; }
+.evidence-card {
+  text-align: left; padding: 0.9rem 1rem; border-radius: 12px;
+  background: rgba(0,0,0,0.35); border: 1px solid rgba(255,90,0,0.2);
+}
+.evidence-card h4 { font-family: 'Orbitron', sans-serif; font-size: 0.72rem; color: var(--neon); margin-bottom: 0.35rem; letter-spacing: 0.04em; }
+.evidence-card p { font-size: 0.72rem; color: rgba(255,255,255,0.55); line-height: 1.55; margin: 0; }
+.evidence-card a { color: #ffb27a; text-decoration: none; border-bottom: 1px solid rgba(255,140,70,0.35); }
+.risk-banner {
+  margin-top: 1.1rem; padding: 1rem 1.05rem; border-radius: 14px; text-align: left;
+  background: rgba(255,61,61,0.08); border: 1px solid rgba(255,61,61,0.35);
+  box-shadow: 0 0 24px rgba(255,61,61,0.08);
+}
+.risk-banner h4 { font-family: 'Orbitron', sans-serif; font-size: 0.75rem; color: #ff8a8a; margin-bottom: 0.45rem; letter-spacing: 0.06em; }
+.risk-banner p, .risk-banner li { font-size: 0.72rem; color: rgba(255,220,220,0.7); line-height: 1.55; }
+.risk-banner ul { margin: 0.4rem 0 0 1rem; }
+.why-list { list-style: none; padding: 0; margin: 1rem 0 0; text-align: left; }
+.why-list li {
+  margin-bottom: 0.65rem; padding: 0.75rem 0.9rem; border-radius: 12px;
+  background: rgba(0,0,0,0.32); border: 1px solid rgba(255,90,0,0.18);
+  font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.5;
+}
+.why-list strong { color: #fff; }
+.dual-live { display: grid; gap: 0.9rem; }
+@media (min-width: 720px) { .dual-live { grid-template-columns: 1fr 1fr; } }
+
 .story-glass {
   background: rgba(0,0,0,0.35); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255,90,0,0.15); border-radius: 16px;
@@ -804,7 +830,7 @@ input[type="range"]::-webkit-slider-thumb {
       <div class="panel" id="panel">
         <div class="brand">SYNAPSE_CORE</div>
         <h1 class="headline">TRADING BOT<br>ACCESS <span class="accent">TERMINAL</span></h1>
-        <p class="tagline">IQ Option · LightGBM · Bot autónomo 24/7</p>
+        <p class="tagline">IQ Option · EMA/MACD/BB · Bot autónomo 24/7</p>
         <div class="status-line">
           <div class="bar"></div>
           <span>CREDENCIALES REQUERIDAS PARA CONECTAR...</span>
@@ -839,7 +865,7 @@ input[type="range"]::-webkit-slider-thumb {
       <div class="story-block story-glass">
         <div class="chapter-label">Capítulo 01 · Qué es</div>
         <h2 class="story-title">SynapseBot<br><span class="hl">Trading algorítmico</span></h2>
-        <p class="story-text">Bot de trading binario para <strong style="color:#fff">IQ Option</strong>. Analiza EURUSD-OTC en velas de 5 minutos, predice dirección con un modelo <strong style="color:#fff">LightGBM</strong> y puede operar solo — de forma manual o en modo servidor 24/7.</p>
+        <p class="story-text">Bot de trading binario para <strong style="color:#fff">IQ Option</strong>. Analiza <strong style="color:#fff">EURUSD-OTC</strong> en velas de 5 minutos con una estrategia por reglas: <strong style="color:#fff">EMA 9/21 + MACD + Bollinger</strong> y confirmación de vela. Puede operar manual o en modo servidor <strong style="color:#fff">24/7</strong>, con gestor de riesgo y panel en vivo.</p>
       </div>
     </section>
 
@@ -849,10 +875,10 @@ input[type="range"]::-webkit-slider-thumb {
         <div class="chapter-label">Capítulo 02 · Cómo funciona</div>
         <h2 class="story-title">Pipeline de<br><span class="hl">decisión</span></h2>
         <div class="steps">
-          <div class="step"><div class="step-num">01</div><div><h4>VELAS EURUSD-OTC</h4><p>~120 velas de 5 min vía iqoptionapi. Expiración 1 min.</p></div></div>
-          <div class="step"><div class="step-num">02</div><div><h4>15 FEATURES</h4><p>RSI14, EMA20/50, MACD, Bollinger, ATR14, retornos y patrón Harami.</p></div></div>
-          <div class="step"><div class="step-num">03</div><div><h4>LIGHTGBM</h4><p>Probabilidad. PUT ≤0.45 · SKIP · CALL ≥0.52. Filtro de volatilidad.</p></div></div>
-          <div class="step"><div class="step-num">04</div><div><h4>GESTOR DE RIESGO</h4><p>% del balance, calidad de señal, rachas, stop-loss diario y tope de monto.</p></div></div>
+          <div class="step"><div class="step-num">01</div><div><h4>VELAS EURUSD-OTC</h4><p>~120 velas de 5 min vía iqoptionapi. Expiración típica 5 min.</p></div></div>
+          <div class="step"><div class="step-num">02</div><div><h4>INDICADORES</h4><p>EMA 9/21, MACD (línea/señal/histograma), Bollinger y ratio del cuerpo de la vela.</p></div></div>
+          <div class="step"><div class="step-num">03</div><div><h4>CONFLUENCIA</h4><p>CALL/PUT solo con 4/4 condiciones. Si no hay acuerdo o hay baja liquidez: SKIP.</p></div></div>
+          <div class="step"><div class="step-num">04</div><div><h4>GESTOR DE RIESGO</h4><p>% del balance, rachas, cooldown, stop-loss diario y tope de monto.</p></div></div>
         </div>
       </div>
     </section>
@@ -865,8 +891,8 @@ input[type="range"]::-webkit-slider-thumb {
         <div class="stats-row">
           <div class="stat-pill"><span class="v">24/7</span><span class="l">Bot servidor</span></div>
           <div class="stat-pill"><span class="v">DEMO</span><span class="l">+ Cuenta real</span></div>
-          <div class="stat-pill"><span class="v">15</span><span class="l">Features ML</span></div>
-          <div class="stat-pill"><span class="v">1M</span><span class="l">Expiración</span></div>
+          <div class="stat-pill"><span class="v">4/4</span><span class="l">Confluencia</span></div>
+          <div class="stat-pill"><span class="v">5M</span><span class="l">Velas / exp.</span></div>
         </div>
       </div>
     </section>
@@ -875,29 +901,89 @@ input[type="range"]::-webkit-slider-thumb {
     <section class="chapter" data-chapter="4" data-video-bright="0.35" data-video-y="25" id="ch4">
       <div class="story-block story-glass">
         <div class="chapter-label">Capítulo 04 · Señal en vivo</div>
-        <h2 class="story-title">Lo que ve el<br><span class="hl">modelo</span></h2>
-        <div class="live-box">
-          <div class="live-head"><span class="pair">EURUSD-OTC · 5M</span><span class="badge">LIVE</span></div>
-          <canvas id="miniChart"></canvas>
-          <div class="live-metrics">
-            <div class="metric"><div class="mv" id="mRsi">—</div><div class="ml">RSI 14</div></div>
-            <div class="metric"><div class="mv" id="mProb">—</div><div class="ml">Probabilidad</div></div>
-            <div class="metric"><div class="mv" id="mSignal">SKIP</div><div class="ml">Señal</div></div>
+        <h2 class="story-title">Lo que ve la<br><span class="hl">estrategia</span></h2>
+        <p class="story-text">Misma estética del motor visual: precio en movimiento, score de confluencia y decisión CALL / PUT / SKIP.</p>
+        <div class="dual-live">
+          <div class="live-box">
+            <div class="live-head"><span class="pair">EURUSD-OTC · 5M</span><span class="badge">LIVE</span></div>
+            <canvas id="miniChart"></canvas>
+            <div class="live-metrics">
+              <div class="metric"><div class="mv" id="mRsi">—</div><div class="ml">EMA gap</div></div>
+              <div class="metric"><div class="mv" id="mProb">—</div><div class="ml">Score 4/4</div></div>
+              <div class="metric"><div class="mv" id="mSignal">SKIP</div><div class="ml">Señal</div></div>
+            </div>
+          </div>
+          <div class="live-box">
+            <div class="live-head"><span class="pair">PULSO DEL MOTOR</span><span class="badge">LIVE</span></div>
+            <canvas id="pulseChart"></canvas>
+            <div class="live-metrics">
+              <div class="metric"><div class="mv" id="mMacd">—</div><div class="ml">MACD hist</div></div>
+              <div class="metric"><div class="mv" id="mBb">—</div><div class="ml">BB width</div></div>
+              <div class="metric"><div class="mv" id="mFiltro">OK</div><div class="ml">Filtros</div></div>
+            </div>
           </div>
         </div>
       </div>
     </section>
 
     <!-- CH 5 -->
-    <section class="chapter" data-chapter="5" data-video-bright="0.7" data-video-y="5">
+    <section class="chapter" data-chapter="5" data-video-bright="0.5" data-video-y="18" id="ch5">
       <div class="story-block story-glass">
-        <div class="chapter-label">Capítulo 05 · Arquitectura</div>
+        <div class="chapter-label">Capítulo 05 · Mercado</div>
+        <h2 class="story-title">Por qué crece el<br><span class="hl">algo trading</span></h2>
+        <p class="story-text">En mercados institucionales el trading automatizado ya es estándar: velocidad, disciplina de reglas y control de ejecución. Eso no garantiza ganancias en binarias OTC — sí explica por qué el enfoque algorítmico se usa cada vez más.</p>
+        <div class="evidence-grid">
+          <div class="evidence-card">
+            <h4>Institucional ~61%</h4>
+            <p>Investigación de mercado (Mordor Intelligence): en 2025 los inversores institucionales representaron ~61% del mercado de trading algorítmico. <a href="https://www.mordorintelligence.com/industry-reports/algorithmic-trading-market" target="_blank" rel="noopener">Fuente</a></p>
+          </div>
+          <div class="evidence-card">
+            <h4>Regulación y vigilancia</h4>
+            <p>Marcos como MiFID II (UE) y supervisión de brokers (SEC/FINRA en EE.UU.) empujan a sistemas con controles, registro y best execution — el “piloto automático” institucional viene con reglas, no magia.</p>
+          </div>
+          <div class="evidence-card">
+            <h4>Encuesta buy-side</h4>
+            <p>The Trade / Algo Survey documenta adopción continua de algos de ejecución (VWAP, implementation shortfall, etc.) entre gestores. <a href="https://www.thetradenews.com/wp-content/uploads/2025/06/Algo-Survey-HF-2025.pdf" target="_blank" rel="noopener">PDF encuesta</a></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CH 6 -->
+    <section class="chapter" data-chapter="6" data-video-bright="0.42" data-video-y="12" id="ch6">
+      <div class="story-block story-glass">
+        <div class="chapter-label">Capítulo 06 · Por qué Synapse</div>
+        <h2 class="story-title">Por qué pueden<br><span class="hl">elegir este bot</span></h2>
+        <ul class="why-list">
+          <li><strong>Estrategia legible.</strong> No es una caja negra: EMA, MACD, Bollinger y SKIP explícito cuando no hay confluencia.</li>
+          <li><strong>Custodia de sesión.</strong> Acceso con token Bearer, cierre forzado multi-dispositivo y daemon 24/7 en servidor (no depende de dejar el celular abierto).</li>
+          <li><strong>Riesgo primero.</strong> % por trade, racha, cooldown y stop-loss diario antes de insistir en el mercado.</li>
+          <li><strong>Panel en vivo.</strong> Fase, heartbeat y countdown del núcleo para ver qué está haciendo ahora.</li>
+          <li><strong>Demo primero.</strong> Pensado para practicar en cuenta DEMO antes de tocar real.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- CH 7 -->
+    <section class="chapter" data-chapter="7" data-video-bright="0.7" data-video-y="5">
+      <div class="story-block story-glass">
+        <div class="chapter-label">Capítulo 07 · Arquitectura</div>
         <h2 class="story-title">Cómo está<br><span class="hl">construido</span></h2>
         <p class="story-text" style="text-align:left">
           <strong style="color:#fff">server.py</strong> — HTTP + sesiones + bot 24/7<br>
-          <strong style="color:#fff">operar.py</strong> — Features, LightGBM, riesgo y trades<br>
-          <strong style="color:#fff">index.html</strong> — Terminal de acceso y dashboard
+          <strong style="color:#fff">operar.py</strong> — EMA/MACD/BB, riesgo y trades<br>
+          <strong style="color:#fff">database.py</strong> — persistencia y estado vivo del núcleo<br>
+          <strong style="color:#fff">index.html</strong> — landing + dashboard por secciones
         </p>
+        <div class="risk-banner">
+          <h4>⚠ Riesgo real · prueba en proceso</h4>
+          <p>El trading (y las opciones binarias) puede generar <strong style="color:#fff">pérdidas totales del capital</strong>. SynapseBot es un proyecto en desarrollo / prueba: no es asesoramiento financiero ni promesa de rentabilidad. Usá DEMO, entendé la estrategia y operá solo con dinero que puedas perder.</p>
+          <ul>
+            <li>Puede haber rachas de SKIP o de pérdidas.</li>
+            <li>Mercados OTC/binarios son de alto riesgo y no equivalen al algo institucional de bolsas.</li>
+            <li>Vos sos responsable de credenciales, modo REAL/DEMO y capital.</li>
+          </ul>
+        </div>
         <a href="#acceso" class="cta-btn" id="ctaTop">IR AL TERMINAL</a>
       </div>
     </section>
@@ -907,7 +993,7 @@ input[type="range"]::-webkit-slider-thumb {
     <div class="footer-inner">
       <div class="footer-brand">
         <div class="logo">SYNAPSE_CORE</div>
-        <p>Bot de trading algorítmico para IQ Option. LightGBM, riesgo adaptativo y ejecución 24/7.</p>
+        <p>Bot de trading algorítmico para IQ Option. Estrategia EMA/MACD/BB, riesgo adaptativo y ejecución 24/7. Proyecto en prueba — alto riesgo de pérdida.</p>
         <div class="socials">
           <a href="https://x.com/CiancioRen53256" target="_blank" rel="noopener" title="X">𝕏</a>
           <a href="https://t.me/anonimatus5" target="_blank" rel="noopener" title="Telegram">✈</a>
@@ -1309,47 +1395,94 @@ document.getElementById('toggleKey').onclick = () => {
   document.getElementById('toggleKey').textContent = is ? '🔒' : '👁';
 };
 
-// Mini Chart
+// Mini Chart + pulse chart
 const mc = document.getElementById('miniChart');
-const mctx = mc.getContext('2d');
-let prices = [], rsi = 52, prob = 0.5, signal = 'SKIP';
-function initChart() {
+const pc = document.getElementById('pulseChart');
+const mctx = mc ? mc.getContext('2d') : null;
+const pctx = pc ? pc.getContext('2d') : null;
+let prices = [], pulse = [], rsi = 52, prob = 0.5, signal = 'SKIP';
+let macdHist = 0, bbWidth = 0.0012, filtro = 'OK';
+function _sizeCanvas(canvas, ctx, h) {
+  if (!canvas || !ctx) return;
   const dpr = devicePixelRatio || 1;
-  mc.width = mc.offsetWidth * dpr; mc.height = 110 * dpr;
-  mctx.setTransform(dpr,0,0,dpr,0,0);
-  prices = []; let p = 1.085;
-  for (let i=0;i<55;i++){ p += (Math.random()-0.48)*0.001; prices.push(p); }
+  canvas.width = canvas.offsetWidth * dpr; canvas.height = h * dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+function initChart() {
+  _sizeCanvas(mc, mctx, 110);
+  _sizeCanvas(pc, pctx, 110);
+  prices = []; pulse = []; let p = 1.085; let q = 0;
+  for (let i=0;i<48;i++) {
+    p += (Math.random()-0.48)*0.0015;
+    prices.push(p);
+    q = q*0.85 + (Math.random()-0.5)*0.4;
+    pulse.push(q);
+  }
+}
+function _drawLine(canvas, ctx, series, stroke) {
+  if (!canvas || !ctx || !series.length) return;
+  const w = canvas.offsetWidth, h = 110;
+  ctx.clearRect(0,0,w,h);
+  const min = Math.min(...series), max = Math.max(...series);
+  const span = (max-min) || 1e-6;
+  ctx.beginPath();
+  series.forEach((v,i) => {
+    const x = (i/(series.length-1))*w;
+    const y = h - ((v-min)/span)*(h-16) - 8;
+    if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  });
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = 2;
+  ctx.shadowColor = stroke;
+  ctx.shadowBlur = 12;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  // glow fill
+  const last = series[series.length-1];
+  const yLast = h - ((last-min)/span)*(h-16) - 8;
+  const grd = ctx.createLinearGradient(0,0,0,h);
+  grd.addColorStop(0, 'rgba(255,90,0,0.18)');
+  grd.addColorStop(1, 'rgba(255,90,0,0)');
+  ctx.lineTo(w,h); ctx.lineTo(0,h); ctx.closePath();
+  ctx.fillStyle = grd; ctx.fill();
+  ctx.beginPath();
+  ctx.arc(w-2, yLast, 3.2, 0, Math.PI*2);
+  ctx.fillStyle = '#fff';
+  ctx.shadowColor = stroke;
+  ctx.shadowBlur = 10;
+  ctx.fill();
+  ctx.shadowBlur = 0;
 }
 function drawChart() {
-  const w = mc.offsetWidth, h = 110;
-  mctx.clearRect(0,0,w,h);
-  const min = Math.min(...prices), max = Math.max(...prices);
-  const range = max-min || 0.001;
-  mctx.beginPath();
-  prices.forEach((p,i)=>{
-    const x = (i/(prices.length-1))*w;
-    const y = h - ((p-min)/range)*(h-14) - 7;
-    i? mctx.lineTo(x,y) : mctx.moveTo(x,y);
-  });
-  mctx.strokeStyle = 'rgba(255,90,0,0.85)'; mctx.lineWidth = 1.7;
-  mctx.shadowBlur = 8; mctx.shadowColor = 'rgba(255,90,0,0.45)';
-  mctx.stroke(); mctx.shadowBlur = 0;
-  mctx.lineTo(w,h); mctx.lineTo(0,h); mctx.closePath();
-  const g = mctx.createLinearGradient(0,0,0,h);
-  g.addColorStop(0,'rgba(255,90,0,0.15)'); g.addColorStop(1,'transparent');
-  mctx.fillStyle = g; mctx.fill();
+  _drawLine(mc, mctx, prices, '#ff5a00');
+  _drawLine(pc, pctx, pulse, '#3ddc84');
 }
 function tickChart() {
-  prices.push(prices[prices.length-1] + (Math.random()-0.48)*0.001);
-  if (prices.length > 55) prices.shift();
-  rsi = Math.max(22, Math.min(78, rsi + (Math.random()-0.5)*3.5));
-  prob = Math.max(0.32, Math.min(0.72, prob + (Math.random()-0.5)*0.035));
-  signal = prob <= 0.45 ? 'PUT' : prob >= 0.52 ? 'CALL' : 'SKIP';
-  document.getElementById('mRsi').textContent = rsi.toFixed(1);
-  document.getElementById('mProb').textContent = prob.toFixed(3);
+  const last = prices[prices.length-1] || 1.085;
+  prices.push(last + (Math.random()-0.48)*0.0016);
+  if (prices.length > 48) prices.shift();
+  const pl = pulse[pulse.length-1] || 0;
+  pulse.push(pl*0.82 + (Math.random()-0.5)*0.45);
+  if (pulse.length > 48) pulse.shift();
+  rsi = Math.max(20, Math.min(80, rsi + (Math.random()-0.5)*4));
+  const score = Math.floor(Math.random()*5);
+  prob = score / 4;
+  signal = score === 4 ? (Math.random()>0.5?'CALL':'PUT') : 'SKIP';
+  macdHist = (Math.random()-0.5)*0.002;
+  bbWidth = 0.0008 + Math.random()*0.0015;
+  filtro = (Math.random()>0.15) ? 'OK' : 'SKIP';
+  const emaEl = document.getElementById('mRsi');
+  if (emaEl) emaEl.textContent = ((rsi-50)/100).toFixed(3);
+  const sc = document.getElementById('mProb');
+  if (sc) sc.textContent = score + '/4';
   const s = document.getElementById('mSignal');
-  s.textContent = signal;
-  s.style.color = signal==='CALL' ? '#3ddc84' : signal==='PUT' ? '#ff5a5a' : 'rgba(255,255,255,0.5)';
+  if (s) { s.textContent = signal; s.style.color = signal==='CALL' ? 'var(--green)' : (signal==='PUT' ? 'var(--red)' : 'rgba(255,255,255,0.7)'); }
+  const mh = document.getElementById('mMacd');
+  if (mh) mh.textContent = macdHist.toFixed(4);
+  const bb = document.getElementById('mBb');
+  if (bb) bb.textContent = bbWidth.toFixed(4);
+  const ff = document.getElementById('mFiltro');
+  if (ff) { ff.textContent = filtro; ff.style.color = filtro==='OK' ? 'var(--green)' : 'rgba(255,255,255,0.55)'; }
   drawChart();
 }
 initChart(); drawChart();
