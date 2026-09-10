@@ -206,6 +206,28 @@ body {
 .evidence-card h4 { font-family: 'Orbitron', sans-serif; font-size: 0.72rem; color: var(--neon); margin-bottom: 0.35rem; letter-spacing: 0.04em; }
 .evidence-card p { font-size: 0.72rem; color: rgba(255,255,255,0.55); line-height: 1.55; margin: 0; }
 .evidence-card a { color: #ffb27a; text-decoration: none; border-bottom: 1px solid rgba(255,140,70,0.35); }
+.policy-soft {
+  margin-top: 1rem; padding: 1rem 1.05rem; border-radius: 14px; text-align: left;
+  background: rgba(255,90,0,0.07); border: 1px solid rgba(255,140,70,0.28);
+}
+.policy-soft h4 { font-family: 'Orbitron', sans-serif; font-size: 0.72rem; color: var(--neon); margin-bottom: 0.4rem; letter-spacing: 0.05em; }
+.policy-soft p, .policy-soft li { font-size: 0.72rem; color: rgba(255,255,255,0.58); line-height: 1.55; }
+.policy-soft ul { margin: 0.35rem 0 0 1rem; }
+.report-box {
+  margin-top: 0.9rem; padding: 1rem 1.05rem; border-radius: 14px; text-align: left;
+  background: rgba(61,220,132,0.06); border: 1px solid rgba(61,220,132,0.28);
+}
+.report-box h4 { font-family: 'Orbitron', sans-serif; font-size: 0.72rem; color: var(--green); margin-bottom: 0.4rem; letter-spacing: 0.05em; }
+.report-box p, .report-box li { font-size: 0.72rem; color: rgba(255,255,255,0.58); line-height: 1.55; }
+.report-box ul { margin: 0.35rem 0 0.7rem 1rem; }
+.report-actions { display: flex; flex-wrap: wrap; gap: 0.55rem; }
+.report-actions a {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  padding: 0.55rem 0.85rem; border-radius: 999px; font-size: 0.68rem;
+  letter-spacing: 0.04em; text-decoration: none; color: #fff;
+  border: 1px solid rgba(255,150,90,0.35); background: rgba(0,0,0,0.35);
+}
+.report-actions a:hover { border-color: var(--neon); color: var(--neon); }
 .risk-banner {
   margin-top: 1.1rem; padding: 1rem 1.05rem; border-radius: 14px; text-align: left;
   background: rgba(255,61,61,0.08); border: 1px solid rgba(255,61,61,0.35);
@@ -1006,18 +1028,51 @@ input[type="range"]::-webkit-slider-thumb {
       </div>
     </section>
 
-        <!-- CH 7 -->
-    <section class="chapter" data-chapter="7" data-video-bright="0.7" data-video-y="5">
+        <!-- CH 7 POLICY -->
+    <section class="chapter" data-chapter="7" data-video-bright="0.48" data-video-y="14" id="ch-bots">
       <div class="story-block story-glass">
-        <div class="chapter-label">Capítulo 07 · Riesgo</div>
+        <div class="chapter-label">Capítulo 07 · Transparencia</div>
+        <h2 class="story-title">Bots e<br><span class="hl">IQ Option</span></h2>
+        <p class="story-text">Queremos ser claros sin alarmismo. IQ Option <strong style="color:#fff">no publica estadísticas oficiales</strong> de baneos por bots (ni por bots “lentos”, ni HFT, ni otros motivos). Por eso <strong style="color:#fff">no inventamos gráficas de porcentajes</strong>: no hay un dataset público verificable.</p>
+        <div class="policy-soft">
+          <h4>Qué sí se sabe</h4>
+          <ul>
+            <li>No hay API oficial de trading para bots de terceros.</li>
+            <li>SynapseBot habla con el protocolo de la plataforma de forma no oficial (como otras herramientas de la comunidad).</li>
+            <li>Circulan relatos aislados de problemas de cuenta; son anécdotas, no un estudio con muestra abierta.</li>
+            <li>Muchas personas prueban automatización en DEMO o en cuentas personales; no existe un registro público de “cuántos ganan y cuánto”.</li>
+          </ul>
+        </div>
+        <div class="report-box">
+          <h4>Canal de evidencia (comunidad)</h4>
+          <p>Si sufrís un baneo o sanción y creés que fue por usar un bot como SynapseBot, mandanos evidencia. Así armamos un registro comunitario transparente (casos reales, no rumores).</p>
+          <ul>
+            <li>Capturas o video del aviso / mail del broker</li>
+            <li>Fecha aproximada y tipo de cuenta (DEMO/REAL)</li>
+            <li>Descripción breve del motivo que te dieron</li>
+            <li>Opcional: intervalo del bot y si era automático 24/7</li>
+          </ul>
+          <div class="report-actions">
+            <a href="https://t.me/anonimatus5" target="_blank" rel="noopener">Telegram · @anonimatus5</a>
+            <a href="mailto:renzociancio@gmail.com?subject=Evidencia%20baneo%20bot%20SynapseBot">Email · renzociancio@gmail.com</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CH 8 -->
+
+    <section class="chapter" data-chapter="8" data-video-bright="0.7" data-video-y="5">
+      <div class="story-block story-glass">
+        <div class="chapter-label">Capítulo 08 · Riesgo</div>
         <h2 class="story-title">Antes de<br><span class="hl">conectar</span></h2>
         <div class="risk-banner" style="margin-top:0">
-          <h4>⚠ Riesgo real · prueba en proceso</h4>
-          <p>El trading (y las opciones binarias) puede generar <strong style="color:#fff">pérdidas totales del capital</strong>. SynapseBot es un proyecto en desarrollo / prueba: no es asesoramiento financiero ni promesa de rentabilidad. Usá DEMO, entendé la estrategia y operá solo con dinero que puedas perder.</p>
+          <h4>⚠ Riesgo · proyecto en prueba</h4>
+          <p>SynapseBot es una herramienta en desarrollo. El trading puede generar pérdidas. No es asesoramiento financiero ni promesa de resultados. Recomendamos empezar en <strong style="color:#fff">DEMO</strong> y usar solo capital que puedas asumir.</p>
           <ul>
             <li>Puede haber rachas de SKIP o de pérdidas.</li>
-            <li>Mercados OTC/binarios son de alto riesgo y no equivalen al trading algorítmico institucional de bolsas.</li>
-            <li>Vos sos responsable de credenciales, modo REAL/DEMO y capital.</li>
+            <li>Los resultados varían; el pasado no garantiza el futuro.</li>
+            <li>Vos elegís modo DEMO/REAL y el tamaño de cada operación.</li>
           </ul>
         </div>
         <a href="#acceso" class="cta-btn" id="ctaTop">IR AL TERMINAL</a>
@@ -1029,7 +1084,7 @@ input[type="range"]::-webkit-slider-thumb {
     <div class="footer-inner">
       <div class="footer-brand">
         <div class="logo">SynapseBot</div>
-        <p>Bot de trading algorítmico para IQ Option. Estrategia EMA/MACD/BB, riesgo adaptativo y ejecución 24/7. Proyecto en prueba — alto riesgo de pérdida.</p>
+        <p>Bot de trading algorítmico para IQ Option. Estrategia EMA/MACD/BB, riesgo adaptativo y ejecución 24/7. Proyecto en prueba.</p>
         <div class="socials">
           <a href="https://x.com/CiancioRen53256" target="_blank" rel="noopener" title="X">𝕏</a>
           <a href="https://t.me/anonimatus5" target="_blank" rel="noopener" title="Telegram">✈</a>
