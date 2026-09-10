@@ -1037,8 +1037,7 @@ function startAmbient() {
   if (audioCtx.state === 'suspended') audioCtx.resume();
   var vid = document.getElementById('bgVideo');
   if (vid) {
-    vid.muted = false;
-    vid.volume = 0.55;
+    vid.muted = true;
     var playP = vid.play();
     if (playP && playP.catch) playP.catch(function(){});
   }
@@ -1046,11 +1045,7 @@ function startAmbient() {
   if (ytPlayer && ytPlayer.playVideo) {
     try { ytPlayer.unMute(); ytPlayer.setVolume(70); ytPlayer.playVideo(); } catch (e) {}
   }
-  if (!ambientEl) {
-    ambientEl = new Audio(AMBIENT_URL);
-    ambientEl.loop = true; ambientEl.preload = 'auto'; ambientEl.volume = 0.18;
-  }
-  ambientEl.play().catch(() => {});
+  if (ambientEl) { try { ambientEl.pause(); } catch (e) {} }
   isSoundOn = true;
   const btn = document.getElementById('soundBtn');
   btn.textContent = 'SONIDO ON'; btn.classList.add('active');
@@ -1331,6 +1326,13 @@ document.addEventListener('DOMContentLoaded', function() {
     appState.riesgoConfig.monto_maximo = parseInt(this.value);
   });
 
+
+  var modoSel = document.getElementById('accountMode');
+  if (modoSel) modoSel.addEventListener('change', function() {
+    actualizarBalanceVisible();
+    calcularMontoSugerido();
+  });
+
   calcularMontoSugerido();
   checkSession();
 });
@@ -1342,10 +1344,27 @@ function toggleTipoMonto() {
   if (tipo === 'auto') calcularMontoSugerido();
 }
 
+function parseMoney(elId) {
+  var el = document.getElementById(elId);
+  if (!el) return 0;
+  return parseFloat(String(el.textContent).replace('$','').replace(/,/g,'')) || 0;
+}
+function cuentaSeleccionada() {
+  var sel = document.getElementById('accountMode');
+  return (sel && sel.value === 'real') ? 'real' : 'demo';
+}
+function actualizarBalanceVisible() {
+  var modo = cuentaSeleccionada();
+  var real = parseMoney('realBalance');
+  var demo = parseMoney('demoBalance');
+  var shown = modo === 'real' ? real : demo;
+  var totalEl = document.getElementById('totalBalance');
+  if (totalEl) totalEl.textContent = '$' + shown.toFixed(2);
+}
 function calcularMontoSugerido() {
   if (!appState.userData) return;
-  const balance = parseFloat(document.getElementById('realBalance').textContent.replace('$', '')) ||
-                  parseFloat(document.getElementById('demoBalance').textContent.replace('$', '')) || 10000;
+  actualizarBalanceVisible();
+  const balance = (cuentaSeleccionada() === 'real' ? parseMoney('realBalance') : parseMoney('demoBalance')) || 0;
   const riesgo = appState.riesgoConfig.riesgo_porcentaje;
   const montoBase = balance * (riesgo / 100);
   let montoFinal = montoBase;
@@ -1358,6 +1377,12 @@ function calcularMontoSugerido() {
   document.getElementById('riesgoActual').textContent = riesgo.toFixed(1) + '%';
 }
 
+function resetManualBtn(btn) {
+  if (!btn) return;
+  btn.disabled = false;
+  btn.innerHTML = '<span class="ico"><svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></span><span class="txt"><b>Ejecutar señal</b><span>Disparo manual</span></span>';
+}
+
 async function operacionManual() {
   const manualBtn = document.getElementById('manualBtn');
   const modo = document.getElementById('accountMode').value;
@@ -1367,42 +1392,50 @@ async function operacionManual() {
     monto = parseFloat(document.getElementById('tradeAmount').value);
     if (monto < 1) { alert('El monto mínimo es $1'); return; }
   }
-  if (appState.botRunning) {
-    alert('⚠️ El bot automático está en ejecución. Deténlo primero.');
+  const token = appState.sessionToken || getSessionToken();
+  if (!token) {
+    alert('No hay sesión. Volvé a conectar al núcleo.');
+    showLoginPanel();
     return;
   }
   manualBtn.disabled = true;
-  manualBtn.textContent = '⏳ EJECUTANDO...';
   try {
     const res = await fetch('/operar', {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify({ modo: modo, monto: monto, forzar_operacion: true, ...appState.riesgoConfig })
+      body: JSON.stringify({
+        modo: modo,
+        monto: monto,
+        ejecutar_auto: true,
+        forzar_operacion: false,
+        ...appState.riesgoConfig
+      })
     });
     const data = await res.json();
-    if (!res.ok || !data.success) throw new Error(data.error || 'Error en la operación');
-    
-    if (data.estadisticas_riesgo) actualizarMonitorRiesgo(data.estadisticas_riesgo);
-    if (data.ejecutado) {
-      agregarTradeHistorial(data);
-      actualizarEstadisticas();
+    if (res.status === 401 || data.session_expired) {
+      clearSessionToken();
+      alert('Sesión vencida. Entrá de nuevo y después tocá Ejecutar señal.');
+      showLoginPanel();
+      return;
     }
-    
+    if (!res.ok || !data.success) throw new Error(data.error || 'Error en la operación');
+
+    if (data.estadisticas_riesgo) actualizarMonitorRiesgo(data.estadisticas_riesgo);
+    if (typeof agregarTradeHistorial === 'function') {
+      agregarTradeHistorial(data);
+    }
+    if (typeof actualizarEstadisticas === 'function') actualizarEstadisticas();
+
+    const razon = data.razon || '';
     if (data.ejecutado) {
-      if (data.resultado_trade && data.resultado_trade.finalizada) {
-        const resultado = data.resultado_trade;
-        alert(`${resultado.win ? '✅' : ''} OPERACIÓN COMPLETADA\n${resultado.win ? 'GANASTE' : 'PERDISTE'}: ${Math.abs(resultado.ganancia).toFixed(2)}\nDecisión: ${data.decision}\nMonto: $${data.monto_calculado || data.monto}`);
-      } else {
-        alert(`⏳ Operación ejecutada\nDecisión: ${data.decision}\nID: ${data.trade_id}`);
-      }
+      alert('Señal ejecutada\n' + data.decision + '\n' + razon + '\nMonto: $' + (data.monto_calculado || monto || '-'));
     } else {
-      alert(`❌ No se pudo ejecutar.\nRazón: ${data.razon || 'Desconocida'}`);
+      alert('Análisis listo — ' + (data.decision || 'SKIP') + '\n' + razon + '\nNo se abrió trade (la estrategia no confirmó 4/4).');
     }
   } catch (err) {
-    alert('❌ Error: ' + err.message);
+    alert('Error manual: ' + err.message);
   } finally {
-    manualBtn.disabled = false;
-    manualBtn.textContent = ' OPERACIÓN MANUAL';
+    resetManualBtn(manualBtn);
   }
 }
 
