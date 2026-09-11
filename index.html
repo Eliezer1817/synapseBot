@@ -932,6 +932,20 @@ input[type="range"]::-webkit-slider-thumb {
   .risk-metrics { grid-template-columns: repeat(2, 1fr); }
   .action-buttons { grid-template-columns: 1fr; }
 }
+
+.idem-alert{margin-top:1rem;padding:0.9rem 1rem;border:1px solid rgba(255,180,60,.45);background:rgba(255,140,0,.08);border-radius:10px;display:none}
+.idem-alert.show{display:block}
+.idem-alert h4{margin:0 0 .4rem;color:#ffb84d;font-size:.85rem;letter-spacing:.06em}
+.idem-alert p{margin:0 0 .6rem;font-size:.75rem;opacity:.9;line-height:1.4}
+.idem-key{font-family:ui-monospace,monospace;font-size:.68rem;word-break:break-all;margin:.35rem 0;padding:.35rem .5rem;background:rgba(0,0,0,.25);border-radius:6px}
+.idem-actions{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.35rem}
+.idem-actions button{font-size:.68rem;padding:.35rem .55rem;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:inherit;cursor:pointer}
+.idem-actions button.ok{border-color:rgba(80,220,140,.5)}
+.idem-actions button.warn{border-color:rgba(255,180,60,.5)}
+.chaos-box{margin-top:1rem;padding:.85rem 1rem;border:1px dashed rgba(120,180,255,.35);border-radius:10px;background:rgba(40,80,140,.12)}
+.chaos-box h4{margin:0 0 .4rem;font-size:.8rem;color:#8ec5ff}
+.chaos-box p{margin:0 0 .55rem;font-size:.7rem;opacity:.85}
+.chaos-box select,.chaos-box button{font-size:.72rem;padding:.35rem .55rem;margin-right:.35rem;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:rgba(0,0,0,.25);color:inherit}
 </style>
 </head>
 <body>
@@ -1410,6 +1424,24 @@ input[type="range"]::-webkit-slider-thumb {
               <div class="tele-reason" id="serverLastReason">El núcleo está detenido. Iniciá 24/7 para ver el pulso en vivo.</div>
               <div class="tele-heartbeat" id="serverHeartbeat">Sin heartbeat</div>
               <div class="tele-bars" id="serverBars"></div>
+              <div class="idem-alert" id="idemAlert">
+                <h4>⚠ IDEMPOTENCIA · uncertain_crash</h4>
+                <p id="idemAlertMsg">Hay operaciones en estado incierto tras un crash. No se recompran.</p>
+                <div id="idemAlertList"></div>
+              </div>
+              <div class="chaos-box" id="chaosBox">
+                <h4>CHAOS CONTROLADO (solo DEMO)</h4>
+                <p>Arma un kill one-shot en el próximo ciclo. Tras el restart, verificá uncertain_crash y que no duplique.</p>
+                <select id="chaosPoint">
+                  <option value="after_cycle_claim">1 · after_cycle_claim</option>
+                  <option value="after_trade_claim">2 · after_trade_claim</option>
+                  <option value="after_in_flight">3 · after_in_flight (pre-BUY)</option>
+                  <option value="after_buy">4 · after_buy (respuesta perdida)</option>
+                </select>
+                <button type="button" onclick="armarChaos()">Armar kill</button>
+                <button type="button" onclick="limpiarChaos()">Limpiar</button>
+                <div id="chaosArmStatus" style="margin-top:.45rem;font-size:.7rem;opacity:.85">Sin chaos armado</div>
+              </div>
             </div>
           </div>
         </section>
@@ -2231,7 +2263,74 @@ function _tickCountdownLocal() {
   cd.textContent = _fmtCountdown(Math.max(0, _proximaTs - (Date.now() / 1000)));
 }
 
+async function resolverIdempotencia(key, resolution) {
+  try {
+    const res = await fetch('/resolver_idempotencia', {
+      method: 'POST',
+      headers: Object.assign({'Content-Type': 'application/json'}, getAuthHeaders()),
+      body: JSON.stringify({ key: key, resolution: resolution })
+    });
+    const data = await res.json();
+    if (!data.success) { alert(data.error || 'No se pudo resolver'); return; }
+    verificarEstadoServidor();
+  } catch (e) { alert('Error resolviendo: ' + e); }
+}
+
+async function armarChaos() {
+  var point = document.getElementById('chaosPoint').value;
+  try {
+    const res = await fetch('/chaos_arm', {
+      method: 'POST',
+      headers: Object.assign({'Content-Type': 'application/json'}, getAuthHeaders()),
+      body: JSON.stringify({ point: point })
+    });
+    const data = await res.json();
+    if (!data.success) { alert(data.error || 'No se pudo armar'); return; }
+    var el = document.getElementById('chaosArmStatus');
+    if (el) el.textContent = 'Armado: ' + point + ' (one-shot). Dejá el núcleo corriendo.';
+    alert(data.message || 'Chaos armado');
+  } catch (e) { alert('Error chaos: ' + e); }
+}
+
+async function limpiarChaos() {
+  try {
+    await fetch('/chaos_clear', { method: 'POST', headers: getAuthHeaders() });
+    var el = document.getElementById('chaosArmStatus');
+    if (el) el.textContent = 'Sin chaos armado';
+  } catch (e) {}
+}
+
+function pintarIdempotencia(data) {
+  var box = document.getElementById('idemAlert');
+  var list = document.getElementById('idemAlertList');
+  var msg = document.getElementById('idemAlertMsg');
+  if (!box || !list) return;
+  var alerta = (data && data.idempotencia_alerta) || (data && data.estado_vivo && data.estado_vivo.idempotencia_alerta);
+  var items = (data && data.idempotencia_uncertain) || [];
+  if ((!alerta || !alerta.count) && (!items || !items.length)) {
+    box.classList.remove('show');
+    list.innerHTML = '';
+    return;
+  }
+  box.classList.add('show');
+  if (msg && alerta && alerta.mensaje) msg.textContent = alerta.mensaje;
+  list.innerHTML = (items || []).map(function(it) {
+    var k = it.key || '';
+    return '<div class="idem-key">' + k +
+      '<div class="idem-actions">' +
+      '<button type="button" class="ok" onclick="resolverIdempotencia(\'' + k + '\', \'resolved_no_trade\')">Resolver: no hubo trade</button>' +
+      '<button type="button" class="warn" onclick="resolverIdempotencia(\'' + k + '\', \'resolved_placed\')">Resolver: sí hubo trade</button>' +
+      '</div></div>';
+  }).join('') || '<div class="idem-key">(keys en alerta)</div>';
+  var chaosEl = document.getElementById('chaosArmStatus');
+  if (chaosEl) {
+    var arm = data && data.chaos_arm;
+    chaosEl.textContent = arm && arm.point ? ('Armado: ' + arm.point) : 'Sin chaos armado';
+  }
+}
+
 function pintarPulsoServidor(data) {
+
   var box = document.getElementById('serverBotStatus');
   if (!box) return;
   mostrarPanelNucleo();
@@ -2318,6 +2417,7 @@ function pintarPulsoServidor(data) {
       return '<span class="' + p.d + '" style="height:' + h + 'px"></span>';
     }).join('');
   }
+  pintarIdempotencia(data);
 }
 
 function iniciarMonitorServidor(forceImmediate) {

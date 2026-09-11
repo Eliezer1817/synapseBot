@@ -437,6 +437,13 @@ def ejecutar_bot_servidor():
                 database.actualizar_estadisticas_bot(bot_stats)
                 continue
 
+            # Chaos DEMO: matar justo después de reclamar la vela
+            try:
+                from operar import _chaos_kill
+                _chaos_kill('after_cycle_claim')
+            except Exception:
+                pass
+
             _set_fase_bot(
                 'analizando',
                 f'Ciclo {ciclo_numero}: leyendo velas y evaluando señal EMA/MACD/BB...',
@@ -645,6 +652,8 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                 'estado_vivo': estado_vivo,
                 'idempotencia_policy': 'at-most-once',
                 'idempotencia_alerta': (estado_vivo or {}).get('idempotencia_alerta'),
+                'idempotencia_uncertain': database.list_uncertain_idempotency(),
+                'chaos_arm': database.get_chaos_arm(),
                 'ultima_operacion': database.obtener_ultima_operacion_bot(),
                 'ultima_operacion_timestamp': bot_stats.get('ultima_operacion_timestamp'),
                 'proxima_operacion_timestamp': proxima_operacion,
@@ -1171,6 +1180,81 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                         'success': False,
                         'error': error_msg
                     }).encode('utf-8'))
+
+            elif self.path == '/resolver_idempotencia':
+                try:
+                    session = get_authenticated_session(self)
+                    if not session:
+                        raise Exception('No autorizado')
+                    content_length = int(self.headers.get('Content-Length', 0))
+                    body = json.loads(self.rfile.read(content_length).decode('utf-8') if content_length else '{}')
+                    key = (body.get('key') or '').strip()
+                    resolution = (body.get('resolution') or '').strip()
+                    note = (body.get('note') or '').strip()
+                    entry = database.resolve_idempotency(key, resolution, note=note)
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'success': True,
+                        'entry': entry,
+                        'key': key,
+                        'idempotencia_alerta': database.obtener_estado_vivo().get('idempotencia_alerta'),
+                    }).encode('utf-8'))
+                except Exception as e:
+                    self.send_response(400)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'success': False,
+                        'error': crypto_util.safe_client_error(e, 'No se pudo resolver'),
+                    }).encode('utf-8'))
+
+            elif self.path == '/chaos_arm':
+                try:
+                    session = get_authenticated_session(self)
+                    if not session:
+                        raise Exception('No autorizado')
+                    cfg = database.load_database()['bot_servidor'].get('config') or {}
+                    if (cfg.get('modo') or 'demo').lower() != 'demo':
+                        raise Exception('Chaos solo permitido en DEMO')
+                    content_length = int(self.headers.get('Content-Length', 0))
+                    body = json.loads(self.rfile.read(content_length).decode('utf-8') if content_length else '{}')
+                    point = (body.get('point') or '').strip()
+                    arm = database.arm_chaos(point, armed_by=crypto_util.mask_email(session.get('email') or ''))
+                    print(f"CHAOS armado: {point}")
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'success': True,
+                        'chaos_arm': arm,
+                        'message': f'Chaos one-shot armado en {point}. El próximo ciclo que pase por ese punto matará el proceso.',
+                    }).encode('utf-8'))
+                except Exception as e:
+                    self.send_response(400)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'success': False,
+                        'error': crypto_util.safe_client_error(e, 'No se pudo armar chaos'),
+                    }).encode('utf-8'))
+
+            elif self.path == '/chaos_clear':
+                try:
+                    session = get_authenticated_session(self)
+                    if not session:
+                        raise Exception('No autorizado')
+                    database.clear_chaos_arm()
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({'success': True}).encode('utf-8'))
+                except Exception as e:
+                    self.send_response(400)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode('utf-8'))
 
             elif self.path == '/reset_riesgo':
                 try:

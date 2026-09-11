@@ -270,6 +270,107 @@ def list_idempotency(limit=50):
     return [{'key': k, **(v or {})} for k, v in items[:limit]]
 
 
+def _refresh_idempotencia_alerta(data):
+    store = _ensure_idempotencia(data)
+    uncertain = [
+        k for k, v in store.items()
+        if isinstance(v, dict) and v.get('status') == 'uncertain_crash'
+    ]
+    estado = data['bot_servidor'].setdefault('estado_vivo', {})
+    if uncertain:
+        estado['idempotencia_alerta'] = {
+            'policy': IDEM_POLICY,
+            'uncertain_keys': uncertain[-10:],
+            'count': len(uncertain),
+            'ts': time.time(),
+            'mensaje': (
+                f'{len(uncertain)} operación(es) en estado incierto. '
+                'No se recompran (at-most-once). Resolvé manualmente en el dashboard.'
+            ),
+        }
+    else:
+        estado.pop('idempotencia_alerta', None)
+    data['bot_servidor']['estado_vivo'] = estado
+
+
+def list_uncertain_idempotency():
+    return [
+        item for item in list_idempotency(100)
+        if item.get('status') == 'uncertain_crash'
+    ]
+
+
+def resolve_idempotency(key, resolution, note=''):
+    """Cierra uncertain_crash sin permitir recompra.
+
+    resolution: resolved_no_trade | resolved_placed
+    """
+    allowed = {'resolved_no_trade', 'resolved_placed'}
+    if resolution not in allowed:
+        raise ValueError('resolution inválida')
+    with _DB_LOCK:
+        data = load_database()
+        store = _ensure_idempotencia(data)
+        entry = store.get(key)
+        if not entry:
+            raise KeyError('key no encontrada')
+        if entry.get('status') != 'uncertain_crash':
+            raise ValueError(f"solo uncertain_crash se puede resolver (ahora: {entry.get('status')})")
+        entry['status'] = resolution
+        entry['resolved_at'] = time.time()
+        entry['updated_at'] = time.time()
+        entry['resolve_note'] = (note or '')[:200]
+        entry['policy'] = IDEM_POLICY
+        store[key] = entry
+        _refresh_idempotencia_alerta(data)
+        save_database(data)
+        return entry
+
+
+def arm_chaos(point, armed_by=''):
+    """One-shot chaos en DEMO. point: after_cycle_claim|after_trade_claim|after_in_flight|after_buy"""
+    allowed = {
+        'after_cycle_claim',
+        'after_trade_claim',
+        'after_in_flight',
+        'after_buy',
+    }
+    if point not in allowed:
+        raise ValueError('chaos point inválido')
+    with _DB_LOCK:
+        data = load_database()
+        data['bot_servidor']['chaos_arm'] = {
+            'point': point,
+            'armed_at': time.time(),
+            'armed_by': armed_by,
+        }
+        save_database(data)
+        return data['bot_servidor']['chaos_arm']
+
+
+def clear_chaos_arm():
+    with _DB_LOCK:
+        data = load_database()
+        data['bot_servidor']['chaos_arm'] = None
+        save_database(data)
+
+
+def consume_chaos_arm(point):
+    """Si hay arm one-shot en este point, lo consume y retorna True."""
+    with _DB_LOCK:
+        data = load_database()
+        arm = data['bot_servidor'].get('chaos_arm') or {}
+        if not arm or arm.get('point') != point:
+            return False
+        data['bot_servidor']['chaos_arm'] = None
+        save_database(data)
+        return True
+
+
+def get_chaos_arm():
+    return (load_database().get('bot_servidor') or {}).get('chaos_arm')
+
+
 def reconcile_orphan_idempotency(min_age_sec=5):
     """Tras restart: claimed/in_flight huérfanos → uncertain_crash (at-most-once).
 
@@ -303,15 +404,6 @@ def reconcile_orphan_idempotency(min_age_sec=5):
             data['bot_servidor']['idempotencia'] = store
             # Señal visible en el pulso del dashboard
             estado = data['bot_servidor'].setdefault('estado_vivo', {})
-            estado['idempotencia_alerta'] = {
-                'policy': IDEM_POLICY,
-                'uncertain_keys': marked[-10:],
-                'count': len(marked),
-                'ts': now,
-                'mensaje': (
-                    f'{len(marked)} operación(es) en estado incierto tras crash/restart. '
-                    'No se recompran (at-most-once).'
-                ),
-            }
+            _refresh_idempotencia_alerta(data)
             save_database(data)
         return marked

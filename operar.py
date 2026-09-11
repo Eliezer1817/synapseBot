@@ -30,6 +30,19 @@ BB_SQUEEZE_RATIO = 0.70
 LOW_LIQUIDITY_HOURS_UTC = {21, 22, 23, 0}
 COOLDOWN_AFTER_LOSS_SEC = TIMEFRAME_SECONDS
 
+def _chaos_kill(point: str) -> None:
+    """Si hay chaos arm one-shot en este point, mata el proceso (Fly reinicia)."""
+    try:
+        import database as _db
+        if _db.consume_chaos_arm(point):
+            print(f"CHAOS: kill deliberado en {point}", file=sys.stderr)
+            sys.stdout.flush()
+            sys.stderr.flush()
+            os._exit(78)
+    except Exception as e:
+        print(f"CHAOS arm check falló: {e}", file=sys.stderr)
+
+
 def candle_open_unix(ts: float = None, timeframe: int = TIMEFRAME_SECONDS) -> int:
     """Inicio de la vela actual (unix floor al timeframe)."""
     t = time.time() if ts is None else float(ts)
@@ -523,16 +536,19 @@ def ejecutar_operacion(
                     resultado["idempotency_status"] = st
                     return resultado
 
-                # Punto de fuego: claimed → in_flight ANTES del buy.
-                # Si el proceso muere aquí o tras enviar sin respuesta: reconcile → uncertain_crash.
+                # Chaos: claimed pero aún no in_flight
+                _chaos_kill('after_trade_claim')
+                # claimed → in_flight ANTES del buy (crash aquí = uncertain, no recompra)
                 _db.finalize_idempotency(ikey, 'in_flight', phase='pre_buy')
+                _chaos_kill('after_in_flight')
 
             check, trade_id, mensaje = False, None, 'no_buy'
             try:
-                # Simulación de crash entre claim/in_flight y BUY (solo si env lo pide)
                 if enforce_idempotency and os.environ.get('SYNAPSE_SIMULATE_CRASH_AFTER_CLAIM', '').strip() == '1':
                     raise SystemExit('SYNAPSE_SIMULATE_CRASH_AFTER_CLAIM: crash deliberado pre-BUY')
                 check, trade_id, mensaje = ejecutar_trade(iq, tipo_operacion, monto, ACTIVO)
+                if enforce_idempotency:
+                    _chaos_kill('after_buy')
             except Exception as buy_exc:
                 if enforce_idempotency and resultado.get("idempotency_key"):
                     import database as _db
