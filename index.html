@@ -967,6 +967,11 @@ input[type="range"]::-webkit-slider-thumb {
 .closed-item{display:flex;justify-content:space-between;gap:.75rem;padding:.45rem .55rem;border-bottom:1px solid rgba(255,255,255,.06);font-size:.75rem}
 .closed-item .pnl.pos{color:#5dffb0}
 .closed-item .pnl.neg{color:#ff6b6b}
+
+.res-table{width:100%;border-collapse:collapse;font-size:.72rem}
+.res-table th,.res-table td{padding:.4rem .45rem;border-bottom:1px solid rgba(255,255,255,.08);text-align:left}
+.res-table th{opacity:.65;font-weight:600;letter-spacing:.04em}
+.res-comp{opacity:.75;font-size:.65rem}
 </style>
 </head>
 <body>
@@ -1378,6 +1383,15 @@ input[type="range"]::-webkit-slider-thumb {
               </div>
             </div>
             <div class="stats-extra">
+              <div>
+                <h3 class="panel-title" style="font-size:.85rem">Investigación · edge por score (hipotético)</h3>
+                <p class="section-lead" style="margin:.25rem 0 .5rem">Incluye SKIP. El WR hipotético mide si el score predice sin ejecutar.</p>
+                <div class="closed-list" id="researchScoreTable"><div class="empty-history">Sin señales de investigación aún. Prendé el Núcleo en DEMO.</div></div>
+              </div>
+              <div>
+                <h3 class="panel-title" style="font-size:.85rem">Señales recientes (investigación)</h3>
+                <div class="closed-list" id="researchRecentList"><div class="empty-history">—</div></div>
+              </div>
               <div>
                 <h3 class="panel-title" style="font-size:.85rem">Resultados por hora (UTC)</h3>
                 <div class="bars-row" id="hourBars"></div>
@@ -2683,8 +2697,48 @@ async function cargarEstadisticasReales() {
     const data = await res.json();
     if (!data.success || !data.stats) return;
     pintarEstadisticasReales(data.stats);
+    if (data.investigacion_por_score) pintarInvestigacion(data.investigacion_por_score, null);
     cargarHistorialServidor();
+    // recientes
+    try {
+      const r2 = await fetch('/investigacion_stats', { headers: getAuthHeaders() });
+      if (r2.ok) {
+        const d2 = await r2.json();
+        if (d2.success) pintarInvestigacion(d2.por_score || data.investigacion_por_score, d2.recientes || []);
+      }
+    } catch (e2) {}
   } catch (e) {}
+}
+
+function pintarInvestigacion(porScore, recientes) {
+  var box = document.getElementById('researchScoreTable');
+  if (box) {
+    var rows = porScore || [];
+    if (!rows.length) box.innerHTML = '<div class="empty-history">Sin señales aún</div>';
+    else {
+      box.innerHTML = '<table class="res-table"><thead><tr><th>Score</th><th>Señales</th><th>WIN</th><th>LOSS</th><th>WR hip.</th><th>SKIP</th></tr></thead><tbody>' +
+        rows.map(function(r) {
+          var wr = r.wr == null ? '—' : (r.wr + '%');
+          return '<tr><td>' + r.score + '</td><td>' + r.senales + '</td><td>' + r.win + '</td><td>' + r.loss +
+            '</td><td>' + wr + '</td><td>' + r.skip + '</td></tr>';
+        }).join('') + '</tbody></table>';
+    }
+  }
+  var list = document.getElementById('researchRecentList');
+  if (list) {
+    var rec = recientes || [];
+    if (!rec.length) list.innerHTML = '<div class="empty-history">—</div>';
+    else list.innerHTML = rec.slice(0, 25).map(function(r) {
+      var c = r.componentes || {};
+      var hyp = r.hipotetico || {};
+      var hypTxt = hyp.pendiente ? 'pendiente' : (hyp.skip_reason || (hyp.win === true ? 'WIN hip.' : (hyp.win === false ? 'LOSS hip.' : (hyp.even ? 'EMPATE' : '—'))));
+      var when = r.ts ? new Date((r.ts < 1e12 ? r.ts*1000 : r.ts)).toLocaleTimeString() : '';
+      return '<div class="closed-item"><span><b>' + (r.decision||'—') + '</b> · ' + (r.score != null ? (r.score+'/4') : 'n/a') +
+        ' · ' + (r.lado_hipotetico || '—') + '<br><span class="res-comp">EMA ' + (c.ema||'—') +
+        ' · MACD ' + (c.macd||'—') + ' · BB ' + (c.bb||'—') + ' · vela ' + (c.candle||'—') +
+        '</span><br><small>' + when + ' · ' + hypTxt + '</small></span></div>';
+    }).join('');
+  }
 }
 
 function pintarEstadisticasReales(s) {

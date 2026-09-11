@@ -266,34 +266,38 @@ def predecir_decision(model_or_df, df_vela_actual=None, forzar: bool = False) ->
     else:
         df = df_vela_actual
 
-    vacio = {"decision": "SKIP", "razon": "No hay datos", "probabilidad": "N/A", "tipo": None}
+    vacio = {
+        "decision": "SKIP",
+        "razon": "No hay datos",
+        "probabilidad": "N/A",
+        "tipo": None,
+        "score": 0,
+        "score_call": 0,
+        "score_put": 0,
+        "lado_hipotetico": None,
+        "componentes": {},
+        "precio_entrada": None,
+    }
     if df is None or getattr(df, "empty", True) or len(df) < 2:
         return vacio
 
     prev = df.iloc[-2]
     curr = df.iloc[-1]
+    precio = float(curr["close"]) if pd.notna(curr.get("close")) else None
 
+    filtro = None
     if not forzar:
         if _sesion_baja_liquidez():
-            return {
-                "decision": "SKIP",
-                "razon": "Sesion de baja liquidez (filtro horario UTC)",
-                "probabilidad": "N/A",
-                "tipo": None,
-            }
-        ancho = curr.get("bb_width")
-        media = curr.get("bb_width_ma20")
-        if pd.notna(ancho) and pd.notna(media) and media > 0:
-            if ancho < media * BB_SQUEEZE_RATIO:
-                return {
-                    "decision": "SKIP",
-                    "razon": f"Bollinger comprimidas ({ancho:.5f} < {BB_SQUEEZE_RATIO:.0%} de {media:.5f})",
-                    "probabilidad": "N/A",
-                    "tipo": None,
-                }
+            filtro = "Sesion de baja liquidez (filtro horario UTC)"
+        else:
+            ancho = curr.get("bb_width")
+            media = curr.get("bb_width_ma20")
+            if pd.notna(ancho) and pd.notna(media) and media > 0:
+                if ancho < media * BB_SQUEEZE_RATIO:
+                    filtro = f"Bollinger comprimidas ({ancho:.5f} < {BB_SQUEEZE_RATIO:.0%} de {media:.5f})"
 
-    tendencia_alcista = curr["ema_9"] > curr["ema_21"]
-    tendencia_bajista = curr["ema_9"] < curr["ema_21"]
+    tendencia_alcista = bool(curr["ema_9"] > curr["ema_21"])
+    tendencia_bajista = bool(curr["ema_9"] < curr["ema_21"])
     macd_up = _macd_cruce_alcista(prev, curr)
     macd_dn = _macd_cruce_bajista(prev, curr)
     bb_up = _bb_impulso_alcista(prev, curr)
@@ -303,8 +307,32 @@ def predecir_decision(model_or_df, df_vela_actual=None, forzar: bool = False) ->
 
     condiciones_call = [tendencia_alcista, macd_up, bb_up, conf_up]
     condiciones_put = [tendencia_bajista, macd_dn, bb_dn, conf_dn]
-    score_call = sum(bool(x) for x in condiciones_call)
-    score_put = sum(bool(x) for x in condiciones_put)
+    score_call = int(sum(bool(x) for x in condiciones_call))
+    score_put = int(sum(bool(x) for x in condiciones_put))
+    score = max(score_call, score_put)
+    if score_call > score_put:
+        lado = "call"
+    elif score_put > score_call:
+        lado = "put"
+    else:
+        lado = None
+
+    # Componentes respecto al lado dominante (o CALL si empate)
+    lado_comp = lado or ("call" if tendencia_alcista else "put")
+    if lado_comp == "call":
+        componentes = {
+            "ema": "bullish" if tendencia_alcista else "bearish",
+            "macd": "bullish" if macd_up else ("bearish" if macd_dn else "neutral"),
+            "bb": "bullish" if bb_up else ("bearish" if bb_dn else "neutral"),
+            "candle": "bullish" if conf_up else ("bearish" if conf_dn else "neutral"),
+        }
+    else:
+        componentes = {
+            "ema": "bearish" if tendencia_bajista else "bullish",
+            "macd": "bearish" if macd_dn else ("bullish" if macd_up else "neutral"),
+            "bb": "bearish" if bb_dn else ("bullish" if bb_up else "neutral"),
+            "candle": "bearish" if conf_dn else ("bullish" if conf_up else "neutral"),
+        }
 
     detalle = (
         f"EMA9{'>' if tendencia_alcista else '<'}EMA21 | "
@@ -313,25 +341,52 @@ def predecir_decision(model_or_df, df_vela_actual=None, forzar: bool = False) ->
         f"cuerpo={curr['body_ratio']:.0%}"
     )
 
+    base = {
+        "score": score,
+        "score_call": score_call,
+        "score_put": score_put,
+        "lado_hipotetico": lado,
+        "componentes": componentes,
+        "precio_entrada": precio,
+        "detalle": detalle,
+    }
+
+    if filtro and not forzar:
+        return {
+            **base,
+            "decision": "SKIP",
+            "razon": filtro,
+            "probabilidad": f"{score / 4:.4f}" if score else "N/A",
+            "tipo": None,
+            "filtro": filtro,
+        }
+
     if all(condiciones_call):
         return {
+            **base,
             "decision": "CALL",
             "razon": f"4/4 CALL - {detalle}",
             "probabilidad": f"{score_call / 4:.4f}",
             "tipo": "call",
+            "lado_hipotetico": "call",
+            "score": 4,
         }
     if all(condiciones_put):
         return {
+            **base,
             "decision": "PUT",
             "razon": f"4/4 PUT - {detalle}",
             "probabilidad": f"{score_put / 4:.4f}",
             "tipo": "put",
+            "lado_hipotetico": "put",
+            "score": 4,
         }
 
     return {
+        **base,
         "decision": "SKIP",
-        "razon": f"Sin confluencia ({max(score_call, score_put)}/4) - {detalle}",
-        "probabilidad": f"{max(score_call, score_put) / 4:.4f}",
+        "razon": f"Sin confluencia ({score}/4) - {detalle}",
+        "probabilidad": f"{score / 4:.4f}",
         "tipo": None,
     }
 
@@ -495,6 +550,15 @@ def ejecutar_operacion(
             "resultado_trade": None,
             "monto_calculado": monto,
             "estadisticas_riesgo": gestor_riesgo.obtener_estadisticas(),
+            "score": decision_data.get("score"),
+            "score_call": decision_data.get("score_call"),
+            "score_put": decision_data.get("score_put"),
+            "componentes": decision_data.get("componentes") or {},
+            "lado_hipotetico": decision_data.get("lado_hipotetico"),
+            "precio_entrada": decision_data.get("precio_entrada"),
+            "activo": ACTIVO,
+            "timeframe": TIMEFRAME_SECONDS,
+            "expiracion_min": EXPIRATION_TIME,
         }
 
         print(f"\nDECISION: {decision_data['decision']}", file=sys.stderr)
@@ -697,3 +761,52 @@ def reconciliar_trade_id(iq: IQ_Option, trade_id, monto: float = None) -> Dict[s
         out["mensaje"] = (out.get("mensaje") or "") + f" | optioninfo: {e}"
 
     return out
+
+
+def evaluar_resultado_hipotetico(precio_entrada: float, precio_salida: float, lado: str) -> Dict[str, Any]:
+    """WIN/LOSS hipotético estilo binaria: CALL gana si sale > entra; PUT si sale < entra."""
+    if precio_entrada is None or precio_salida is None or not lado:
+        return {"finalizada": False, "win": None, "ganancia_hipotetica": None}
+    lado = lado.lower()
+    if lado == "call":
+        win = precio_salida > precio_entrada
+        even = precio_salida == precio_entrada
+    else:
+        win = precio_salida < precio_entrada
+        even = precio_salida == precio_entrada
+    if even:
+        return {"finalizada": True, "win": None, "even": True, "ganancia_hipotetica": 0.0,
+                "precio_entrada": precio_entrada, "precio_salida": precio_salida}
+    # payout demo simbólico +0.8 / -1.0 por unidad (solo investigación)
+    pnl = 0.8 if win else -1.0
+    return {
+        "finalizada": True,
+        "win": bool(win),
+        "even": False,
+        "ganancia_hipotetica": pnl,
+        "precio_entrada": precio_entrada,
+        "precio_salida": precio_salida,
+        "lado": lado,
+    }
+
+
+def precio_en_timestamp(iq: IQ_Option, ts: float, activo: str = ACTIVO) -> Optional[float]:
+    """Obtiene close cercano a ts usando velas 5m."""
+    try:
+        candles = iq.get_candles(activo, TIMEFRAME_SECONDS, 5, float(ts) + 5)
+        if not candles:
+            return None
+        # última vela cerrada <= ts+buffer
+        best = None
+        for c in candles:
+            from_t = c.get("from") or c.get("to")
+            if from_t is None:
+                continue
+            if best is None or abs(float(from_t) - float(ts)) < abs(float(best.get("from", 0)) - float(ts)):
+                best = c
+        if not best:
+            best = candles[-1]
+        return float(best.get("close"))
+    except Exception as e:
+        print(f"precio_en_timestamp error: {e}", file=sys.stderr)
+        return None

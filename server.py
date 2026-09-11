@@ -494,6 +494,50 @@ def ejecutar_bot_servidor():
             )
 
             decision = (resultado.get('decision') or 'SKIP').upper()
+            # Investigación: loguear TODA señal (también SKIP) sin cambiar reglas
+            try:
+                database.registrar_senal_investigacion({
+                    'decision': resultado.get('decision'),
+                    'razon': resultado.get('razon'),
+                    'score': resultado.get('score'),
+                    'score_call': resultado.get('score_call'),
+                    'score_put': resultado.get('score_put'),
+                    'componentes': resultado.get('componentes') or {},
+                    'lado_hipotetico': resultado.get('lado_hipotetico') or (
+                        'call' if 'CALL' in decision else ('put' if 'PUT' in decision else None)
+                    ),
+                    'precio_entrada': resultado.get('precio_entrada'),
+                    'probabilidad': resultado.get('probabilidad'),
+                    'ejecutado': bool(resultado.get('ejecutado')),
+                    'trade_id': resultado.get('trade_id'),
+                    'modo': bot_config.get('modo', 'demo'),
+                    'activo': resultado.get('activo') or 'EURUSD-OTC',
+                    'expiracion_min': resultado.get('expiracion_min') or 5,
+                    'candle_open': resultado.get('candle_open'),
+                })
+            except Exception as res_err:
+                print(f"⚠️ No se pudo registrar señal de investigación: {res_err}")
+
+            # Resolver hipotéticos vencidos (sin ejecutar trade)
+            try:
+                from operar import precio_en_timestamp, evaluar_resultado_hipotetico
+                for pend in database.listar_senales_pendientes_hipoteticas(30):
+                    lado = pend.get('lado_hipotetico')
+                    entrada = pend.get('precio_entrada')
+                    if not lado or entrada is None:
+                        database.actualizar_senal_hipotetica(pend.get('id'), {
+                            'pendiente': False, 'skip_reason': 'sin_lado_o_precio'
+                        })
+                        continue
+                    salida = precio_en_timestamp(session_activa['iq'], float(pend.get('resolve_at') or time.time()))
+                    if salida is None:
+                        continue
+                    hyp = evaluar_resultado_hipotetico(float(entrada), float(salida), lado)
+                    hyp['pendiente'] = False
+                    database.actualizar_senal_hipotetica(pend.get('id'), hyp)
+            except Exception as hyp_err:
+                print(f"⚠️ Hipotéticos: {hyp_err}")
+
             if resultado.get('ejecutado'):
                 _set_fase_bot(
                     'operando',
@@ -682,6 +726,30 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
             }).encode('utf-8'))
             return
 
+        elif self.path.split('?')[0] == '/investigacion_stats':
+            session = get_authenticated_session(self)
+            if not session:
+                self.send_response(401)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': 'No autorizado'}).encode('utf-8'))
+                return
+            try:
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'success': True,
+                    'por_score': database.stats_investigacion_por_score(),
+                    'recientes': database.listar_investigacion(40),
+                }).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': crypto_util.safe_client_error(e)}).encode('utf-8'))
+            return
+
         elif self.path.split('?')[0] == '/estadisticas_reales':
             session = get_authenticated_session(self)
             if not session:
@@ -700,6 +768,7 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                     'stats': stats,
                     'uncertain': database.list_uncertain_idempotency(),
                     'idempotencia_alerta': database.obtener_estado_vivo().get('idempotencia_alerta'),
+                    'investigacion_por_score': database.stats_investigacion_por_score(),
                 }).encode('utf-8'))
             except Exception as e:
                 print(f"❌ Error en /estadisticas_reales: {e}")

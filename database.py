@@ -54,7 +54,8 @@ def init_database():
                     'heartbeat': None
                 },
                 # keys: v1:{activo}:{candle_open}:{CALL|PUT|CYCLE}
-                'idempotencia': {}
+                'idempotencia': {},
+                'investigacion': []
             }
         }
         save_database(data)
@@ -485,3 +486,107 @@ def unresolved_uncertain_count():
 
 def get_idempotency_entry(key):
     return get_idempotency(key)
+
+
+def _ensure_investigacion(data):
+    bot = data.setdefault('bot_servidor', {})
+    if 'investigacion' not in bot or not isinstance(bot['investigacion'], list):
+        bot['investigacion'] = []
+    return bot['investigacion']
+
+
+def registrar_senal_investigacion(senal: dict):
+    """Guarda señal potencial (incluye SKIP) para estudio de edge."""
+    with _DB_LOCK:
+        data = load_database()
+        rows = _ensure_investigacion(data)
+        entry = dict(senal or {})
+        entry.setdefault('id', f"res-{int(time.time()*1000)}")
+        entry.setdefault('ts', time.time())
+        entry.setdefault('resolve_at', entry['ts'] + int(entry.get('expiracion_min') or 5) * 60)
+        entry.setdefault('hipotetico', {})
+        entry['hipotetico'].setdefault('pendiente', True)
+        rows.append(entry)
+        if len(rows) > 2000:
+            data['bot_servidor']['investigacion'] = rows[-2000:]
+        save_database(data)
+        return entry
+
+
+def listar_senales_pendientes_hipoteticas(limit=50):
+    data = load_database()
+    rows = _ensure_investigacion(data)
+    now = time.time()
+    out = []
+    for r in rows:
+        hyp = r.get('hipotetico') or {}
+        if hyp.get('pendiente') and float(r.get('resolve_at') or 0) <= now:
+            out.append(r)
+    return out[-limit:]
+
+
+def actualizar_senal_hipotetica(senal_id, hipotetico: dict):
+    with _DB_LOCK:
+        data = load_database()
+        rows = _ensure_investigacion(data)
+        for r in rows:
+            if r.get('id') == senal_id:
+                r['hipotetico'] = dict(hipotetico or {})
+                r['hipotetico']['pendiente'] = False
+                r['hipotetico']['resolved_at'] = time.time()
+                save_database(data)
+                return r
+        return None
+
+
+def listar_investigacion(limit=200):
+    data = load_database()
+    rows = list(_ensure_investigacion(data))
+    rows.sort(key=lambda x: x.get('ts', 0), reverse=True)
+    return rows[:limit]
+
+
+def stats_investigacion_por_score():
+    """Tabla score → señales / WIN / LOSS / WR (solo hipotéticos o reales resueltos)."""
+    rows = _ensure_investigacion(load_database())
+    buckets = {s: {'senales': 0, 'win': 0, 'loss': 0, 'even': 0, 'skip': 0, 'call': 0, 'put': 0} for s in range(0, 5)}
+    for r in rows:
+        score = int(r.get('score') or 0)
+        if score not in buckets:
+            score = max(0, min(4, score))
+        buckets[score]['senales'] += 1
+        d = (r.get('decision') or '').upper()
+        if d == 'SKIP':
+            buckets[score]['skip'] += 1
+        elif 'CALL' in d:
+            buckets[score]['call'] += 1
+        elif 'PUT' in d:
+            buckets[score]['put'] += 1
+        hyp = r.get('hipotetico') or {}
+        if hyp.get('pendiente'):
+            continue
+        if hyp.get('even'):
+            buckets[score]['even'] += 1
+        elif hyp.get('win') is True:
+            buckets[score]['win'] += 1
+        elif hyp.get('win') is False:
+            buckets[score]['loss'] += 1
+    table = []
+    for s in range(4, -1, -1):
+        b = buckets[s]
+        decided = b['win'] + b['loss']
+        wr = round(b['win'] / decided * 100, 1) if decided else None
+        table.append({
+            'score': f'{s}/4',
+            'score_n': s,
+            'senales': b['senales'],
+            'win': b['win'],
+            'loss': b['loss'],
+            'even': b['even'],
+            'wr': wr,
+            'skip': b['skip'],
+            'call': b['call'],
+            'put': b['put'],
+            'resueltas': decided,
+        })
+    return table
