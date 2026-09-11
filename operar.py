@@ -30,6 +30,12 @@ BB_SQUEEZE_RATIO = 0.70
 LOW_LIQUIDITY_HOURS_UTC = {21, 22, 23, 0}
 COOLDOWN_AFTER_LOSS_SEC = TIMEFRAME_SECONDS
 
+def candle_open_unix(ts: float = None, timeframe: int = TIMEFRAME_SECONDS) -> int:
+    """Inicio de la vela actual (unix floor al timeframe)."""
+    t = time.time() if ts is None else float(ts)
+    return int(t // timeframe) * timeframe
+
+
 FEATURES = [
     "ema_9", "ema_21", "macd", "macd_signal", "macd_hist",
     "bb_high", "bb_mid", "bb_low", "bb_width", "body_ratio",
@@ -391,6 +397,7 @@ def ejecutar_operacion(
     ejecutar_auto: bool = False,
     forzar_operacion: bool = False,
     config_riesgo: dict = None,
+    enforce_idempotency: bool = False,
 ) -> Dict[str, Any]:
     print("\n" + "-" * 50, file=sys.stderr)
     print(f"ANALISIS EMA/MACD/BB - Modo: {modo.upper()}", file=sys.stderr)
@@ -488,12 +495,40 @@ def ejecutar_operacion(
             resultado["razon"] = "Operacion manual forzada sin senal"
             print("Sin senal. Forzando CALL por peticion manual.", file=sys.stderr)
 
+        candle_ts = candle_open_unix()
+        resultado["candle_open"] = candle_ts
+        resultado["idempotency_key"] = None
+
         if (ejecutar_auto and decision_data["tipo"]) or (forzar_operacion and tipo_operacion):
             print("\nEJECUCION AUTOMATICA/FORZADA", file=sys.stderr)
+            # Idempotencia: reclamar CALL/PUT de esta vela ANTES del buy
+            if enforce_idempotency and not forzar_operacion:
+                import database as _db
+                claimed, ikey = _db.claim_trade(ACTIVO, candle_ts, tipo_operacion, {
+                    'modo': modo,
+                    'monto': monto,
+                })
+                resultado["idempotency_key"] = ikey
+                if not claimed:
+                    print(f"Idempotencia: {ikey} ya reclamada — no se recompra.", file=sys.stderr)
+                    resultado["decision"] = "SKIP"
+                    resultado["razon"] = f"Idempotencia: trade {tipo_operacion.upper()} ya intentado en esta vela"
+                    resultado["ejecutado"] = False
+                    return resultado
+
             check, trade_id, mensaje = ejecutar_trade(iq, tipo_operacion, monto, ACTIVO)
             resultado["ejecutado"] = check
             resultado["trade_id"] = trade_id
             resultado["mensaje_trade"] = mensaje
+
+            if enforce_idempotency and resultado.get("idempotency_key"):
+                import database as _db
+                _db.finalize_idempotency(
+                    resultado["idempotency_key"],
+                    "placed" if check else "failed",
+                    trade_id=trade_id,
+                    mensaje=mensaje,
+                )
 
             if check and trade_id:
                 resultado_trade = verificar_resultado(iq, trade_id, monto)

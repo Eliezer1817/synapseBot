@@ -42,6 +42,7 @@ bot_servidor_activo = db_data['bot_servidor']['activo']
 bot_servidor_config = db_data['bot_servidor']['config']
 bot_servidor_thread = None
 bot_servidor_estadisticas = db_data['bot_servidor']['estadisticas']
+bot_start_lock = threading.Lock()
 
 class SessionManager:
     # Inactividad: 8h. Edad máxima absoluta: 24h desde create.
@@ -305,11 +306,11 @@ def ejecutar_bot_servidor():
     print(f"\n🎯 INICIANDO BOT SERVIDOR 24/7 - INDEPENDIENTE DEL CLIENTE")
     _set_fase_bot('conectando', 'Conectando a IQ Option...')
     
-    # Cargar configuración desde la base de datos
+    # Cargar configuración / credenciales descifradas
     db_data = database.load_database()
     bot_config = db_data['bot_servidor']['config']
     bot_stats = db_data['bot_servidor']['estadisticas']
-    bot_credenciales = db_data['bot_servidor']['credenciales']
+    bot_credenciales = database.obtener_credenciales_bot()
 
     if not bot_credenciales or not bot_credenciales.get('email') or not bot_credenciales.get('password'):
         print("❌ ERROR: Credenciales del bot no configuradas. Deteniendo bot.")
@@ -404,26 +405,57 @@ def ejecutar_bot_servidor():
             # Stop / racha: operar.py ya bloquea. Si viene STOP_LOSS, apagar el loop 24/7.
             stop_loss_diario = bot_config.get('stop_loss_diario', 5)
             
+            from operar import ACTIVO, candle_open_unix
+            candle_ts = candle_open_unix()
+            claimed_cycle, cycle_key = database.claim_candle_cycle(
+                ACTIVO,
+                candle_ts,
+                {'ciclo': ciclo_numero, 'modo': bot_config.get('modo', 'demo')},
+            )
+            if not claimed_cycle:
+                print(f"⏭️  Vela {candle_ts} ya procesada ({cycle_key}) — skip ciclo (idempotencia)")
+                _set_fase_bot(
+                    'esperando',
+                    f'Vela {candle_ts} ya analizada. Esperando próxima vela (idempotencia).',
+                    ciclo=ciclo_numero,
+                    modo=bot_config.get('modo', 'demo'),
+                    candle_open=candle_ts,
+                )
+                # Empujar siguiente ciclo al borde de la próxima vela
+                siguiente_ciclo = candle_ts + max(intervalo_segundos, 300)
+                bot_stats['proxima_operacion_timestamp'] = siguiente_ciclo
+                database.actualizar_estadisticas_bot(bot_stats)
+                continue
+
             _set_fase_bot(
                 'analizando',
                 f'Ciclo {ciclo_numero}: leyendo velas y evaluando señal EMA/MACD/BB...',
                 ciclo=ciclo_numero,
                 modo=bot_config.get('modo', 'demo'),
+                candle_open=candle_ts,
             )
 
-            # 🔥 EJECUTAR OPERACIÓN
+            # 🔥 EJECUTAR OPERACIÓN (idempotencia en buy)
             resultado = ejecutar_operacion(
                 session_activa['iq'],
                 modo=bot_config.get('modo', 'demo'),
                 monto=bot_config.get('monto'),
                 ejecutar_auto=True,
                 forzar_operacion=False,
+                enforce_idempotency=True,
                 config_riesgo={
                     'riesgo_porcentaje': bot_config.get('riesgo_porcentaje', 2.0),
                     'max_perdidas_consecutivas': bot_config.get('max_perdidas_consecutivas', 4),
                     'stop_loss_diario': bot_config.get('stop_loss_diario', 5),
                     'monto_maximo': bot_config.get('monto_maximo', 10)
                 }
+            )
+            database.finalize_idempotency(
+                cycle_key,
+                'done',
+                decision=(resultado.get('decision') or 'SKIP'),
+                ejecutado=bool(resultado.get('ejecutado')),
+                trade_id=resultado.get('trade_id'),
             )
 
             decision = (resultado.get('decision') or 'SKIP').upper()
@@ -1020,56 +1052,56 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                     session = get_authenticated_session(self)
                     if not session:
                         raise Exception("No hay sesión activa")
-                    
-                    if database.esta_activo_bot_servidor():
-                        raise Exception("El bot servidor ya está activo")
-                    
+
                     content_length = int(self.headers.get('Content-Length', 0))
                     post_data = self.rfile.read(content_length) if content_length > 0 else b'{}'
                     config = json.loads(post_data.decode('utf-8'))
-                    
-                    # Credenciales del login; deben ser del mismo usuario autenticado
-                    credenciales = database.obtener_credenciales_bot()
-                    if not credenciales or not credenciales.get('password'):
-                        raise Exception("No se encontraron credenciales guardadas. Por favor, inicie sesión de nuevo.")
-                    if (credenciales.get('email') or '').lower() != (session.get('email') or '').lower():
-                        raise Exception(
-                            "Las credenciales guardadas no coinciden con tu sesión. "
-                            "Cerrá sesión e iniciá de nuevo."
-                        )
-                    # Reafirmar ownership: re-guardar solo si match (ya cifradas vía guardar)
-                    database.guardar_credenciales_bot({
-                        'email': session['email'],
-                        'password': credenciales['password'],
-                    })
 
-                    database.guardar_config_bot(config)
-                    
-                    # Reiniciar estadísticas en la base de datos
-                    nuevas_estadisticas = {
-                        'operaciones_ejecutadas': 0,
-                        'operaciones_exitosas': 0,
-                        'ganancia_total': 0.0,
-                        'ultima_operacion_timestamp': None,
-                        'inicio_timestamp': time.time(),
-                        'proxima_operacion_timestamp': None
-                    }
-                    database.actualizar_estadisticas_bot(nuevas_estadisticas)
-                    database.actualizar_estado_vivo(
-                        'conectando',
-                        'Iniciando núcleo 24/7...',
-                        modo=config.get('modo', 'demo'),
-                    )
-                    
-                    # Iniciar thread del bot
-                    bot_servidor_thread = threading.Thread(target=ejecutar_bot_servidor)
-                    bot_servidor_thread.daemon = True
-                    bot_servidor_thread.start()
-                    
+                    with bot_start_lock:
+                        if database.esta_activo_bot_servidor() or (
+                            bot_servidor_thread and bot_servidor_thread.is_alive()
+                        ):
+                            raise Exception("El bot servidor ya está activo")
+
+                        # Credenciales del login; deben ser del mismo usuario autenticado
+                        credenciales = database.obtener_credenciales_bot()
+                        if not credenciales or not credenciales.get('password'):
+                            raise Exception("No se encontraron credenciales guardadas. Por favor, inicie sesión de nuevo.")
+                        if (credenciales.get('email') or '').lower() != (session.get('email') or '').lower():
+                            raise Exception(
+                                "Las credenciales guardadas no coinciden con tu sesión. "
+                                "Cerrá sesión e iniciá de nuevo."
+                            )
+                        database.guardar_credenciales_bot({
+                            'email': session['email'],
+                            'password': credenciales['password'],
+                        })
+
+                        database.guardar_config_bot(config)
+
+                        nuevas_estadisticas = {
+                            'operaciones_ejecutadas': 0,
+                            'operaciones_exitosas': 0,
+                            'ganancia_total': 0.0,
+                            'ultima_operacion_timestamp': None,
+                            'inicio_timestamp': time.time(),
+                            'proxima_operacion_timestamp': None
+                        }
+                        database.actualizar_estadisticas_bot(nuevas_estadisticas)
+                        database.actualizar_estado_vivo(
+                            'conectando',
+                            'Iniciando núcleo 24/7...',
+                            modo=config.get('modo', 'demo'),
+                        )
+
+                        bot_servidor_thread = threading.Thread(target=ejecutar_bot_servidor)
+                        bot_servidor_thread.daemon = True
+                        bot_servidor_thread.start()
+
                     print(f"🚀 BOT 24/7 INICIADO para {crypto_util.mask_email(session['email'])}")
                     print(f"📋 Configuración: {config}")
                     print(f"🔐 Credenciales guardadas para reconexión automática")
-                    
+
                     self.send_response(200)
                     self.send_header('Content-type', 'application/json')
                     self.end_headers()
@@ -1196,12 +1228,15 @@ def run_server(port=PORT):
     # Inicializar la base de datos
     database.init_database()
 
-    # Si el bot estaba activo, reiniciar el thread
-    if database.esta_activo_bot_servidor():
-        print("🤖 Reiniciando el bot servidor...")
-        bot_servidor_thread = threading.Thread(target=ejecutar_bot_servidor)
-        bot_servidor_thread.daemon = True
-        bot_servidor_thread.start()
+    # Si el bot estaba activo, reiniciar el thread (idempotencia evita re-buy de la misma vela)
+    with bot_start_lock:
+        if database.esta_activo_bot_servidor() and not (
+            bot_servidor_thread and bot_servidor_thread.is_alive()
+        ):
+            print("🤖 Reiniciando el bot servidor...")
+            bot_servidor_thread = threading.Thread(target=ejecutar_bot_servidor)
+            bot_servidor_thread.daemon = True
+            bot_servidor_thread.start()
 
     # Iniciar limpieza de sesiones
     cleanup_thread = threading.Thread(target=cleanup_sessions_periodically)

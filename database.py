@@ -1,9 +1,12 @@
 import json
 import os
 import time
+import threading
 from datetime import datetime
 
 import crypto_util
+
+_DB_LOCK = threading.RLock()
 
 DB_FILE = 'trading_data.json'
 
@@ -28,24 +31,30 @@ def init_database():
                     'fase': 'detenido',
                     'mensaje': 'El núcleo está detenido.',
                     'heartbeat': None
-                }
+                },
+                # keys: v1:{activo}:{candle_open}:{CALL|PUT|CYCLE}
+                'idempotencia': {}
             }
         }
         save_database(data)
 
 def load_database():
     """Cargar la base de datos"""
-    try:
-        with open(DB_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except:
-        init_database()
-        return load_database()
+    with _DB_LOCK:
+        try:
+            with open(DB_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            init_database()
+            return load_database()
 
 def save_database(data):
-    """Guardar la base de datos"""
-    with open(DB_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    """Guardar la base de datos (bajo lock)."""
+    with _DB_LOCK:
+        tmp = DB_FILE + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        os.replace(tmp, DB_FILE)
 
 def agregar_operacion(operacion):
     """Agregar una operación al historial"""
@@ -175,3 +184,74 @@ def esta_activo_bot_servidor():
     """Verificar si el bot servidor está activo"""
     data = load_database()
     return data['bot_servidor']['activo']
+
+
+# ---------------------------------------------------------------------------
+# Idempotencia 24/7
+# Formato de key: v1:{activo}:{candle_open_unix}:{CALL|PUT|CYCLE}
+# CYCLE = vela ya analizada (SKIP o trade); CALL/PUT = intento de buy.
+# claim atómico: si la key existe, no se vuelve a ejecutar.
+# ---------------------------------------------------------------------------
+
+def _ensure_idempotencia(data):
+    bot = data.setdefault('bot_servidor', {})
+    if 'idempotencia' not in bot or not isinstance(bot['idempotencia'], dict):
+        bot['idempotencia'] = {}
+    return bot['idempotencia']
+
+
+def claim_idempotency(key, meta=None):
+    """Intenta reclamar una key. True = primera vez; False = ya existía."""
+    with _DB_LOCK:
+        data = load_database()
+        store = _ensure_idempotencia(data)
+        if key in store:
+            return False
+        entry = {
+            'status': 'claimed',
+            'ts': time.time(),
+        }
+        if meta:
+            entry.update(meta)
+        store[key] = entry
+        # podar: mantener últimas ~200 keys
+        if len(store) > 200:
+            ordered = sorted(store.items(), key=lambda kv: kv[1].get('ts', 0))
+            for old_k, _ in ordered[:-200]:
+                del store[old_k]
+        save_database(data)
+        return True
+
+
+def finalize_idempotency(key, status, **extra):
+    with _DB_LOCK:
+        data = load_database()
+        store = _ensure_idempotencia(data)
+        entry = store.get(key) or {'ts': time.time()}
+        entry['status'] = status
+        entry['updated_at'] = time.time()
+        entry.update(extra)
+        store[key] = entry
+        save_database(data)
+        return entry
+
+
+def get_idempotency(key):
+    data = load_database()
+    return _ensure_idempotencia(data).get(key)
+
+
+def candle_already_processed(activo, candle_open):
+    key = f"v1:{activo}:{int(candle_open)}:CYCLE"
+    return get_idempotency(key) is not None
+
+
+def claim_candle_cycle(activo, candle_open, meta=None):
+    key = f"v1:{activo}:{int(candle_open)}:CYCLE"
+    return claim_idempotency(key, meta), key
+
+
+def claim_trade(activo, candle_open, direction, meta=None):
+    direction = (direction or '').upper()
+    key = f"v1:{activo}:{int(candle_open)}:{direction}"
+    return claim_idempotency(key, meta), key
