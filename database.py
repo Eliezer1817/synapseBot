@@ -278,15 +278,16 @@ def _refresh_idempotencia_alerta(data):
     ]
     estado = data['bot_servidor'].setdefault('estado_vivo', {})
     if uncertain:
+        n = len(uncertain)
+        titulo = f"⚠️ {n} operación incierta" if n == 1 else f"⚠️ {n} operaciones inciertas"
         estado['idempotencia_alerta'] = {
             'policy': IDEM_POLICY,
             'uncertain_keys': uncertain[-10:],
-            'count': len(uncertain),
+            'count': n,
             'ts': time.time(),
-            'mensaje': (
-                f'{len(uncertain)} operación(es) en estado incierto. '
-                'No se recompran (at-most-once). Resolvé manualmente en el dashboard.'
-            ),
+            'titulo': titulo,
+            'mensaje': 'El sistema bloqueó automáticamente una posible duplicación.',
+            'accion': 'Requiere reconciliación.',
         }
     else:
         estado.pop('idempotencia_alerta', None)
@@ -407,3 +408,34 @@ def reconcile_orphan_idempotency(min_age_sec=5):
             _refresh_idempotencia_alerta(data)
             save_database(data)
         return marked
+
+
+def observabilidad_stats():
+    """Contadores para dashboard de observabilidad."""
+    store = _ensure_idempotencia(load_database())
+    counts = {
+        'uncertain_crash': 0,
+        'placed': 0,
+        'failed': 0,
+        'resolved_no_trade': 0,
+        'resolved_placed': 0,
+        'in_flight': 0,
+        'claimed': 0,
+        'blocked_duplicates': 0,  # keys que no son el primer claim exitoso implícito
+    }
+    for _k, v in store.items():
+        if not isinstance(v, dict):
+            continue
+        st = v.get('status') or ''
+        if st in counts:
+            counts[st] += 1
+        if st in ('uncertain_crash', 'resolved_no_trade', 'resolved_placed', 'placed', 'failed'):
+            # toda key de trade (no CYCLE) cuenta como intento protegido
+            if not str(_k).endswith(':CYCLE'):
+                counts['blocked_duplicates'] += 0  # placeholder
+    # blocked = uncertain + resolved_* (casos donde se evitó recompra o se cerró a mano)
+    trade_keys = [k for k, v in store.items() if isinstance(v, dict) and not str(k).endswith(':CYCLE')]
+    counts['trade_keys'] = len(trade_keys)
+    counts['uncertain'] = counts['uncertain_crash']
+    counts['requiere_reconciliacion'] = counts['uncertain_crash']
+    return counts

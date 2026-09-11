@@ -933,10 +933,14 @@ input[type="range"]::-webkit-slider-thumb {
   .action-buttons { grid-template-columns: 1fr; }
 }
 
-.idem-alert{margin-top:1rem;padding:0.9rem 1rem;border:1px solid rgba(255,180,60,.45);background:rgba(255,140,0,.08);border-radius:10px;display:none}
+.idem-alert{margin-top:1rem;padding:1rem 1.1rem;border:1px solid rgba(255,180,60,.55);background:linear-gradient(135deg,rgba(255,140,0,.14),rgba(40,20,0,.35));border-radius:12px;display:none;box-shadow:0 0 24px rgba(255,140,0,.12)}
 .idem-alert.show{display:block}
-.idem-alert h4{margin:0 0 .4rem;color:#ffb84d;font-size:.85rem;letter-spacing:.06em}
-.idem-alert p{margin:0 0 .6rem;font-size:.75rem;opacity:.9;line-height:1.4}
+.idem-alert .idem-title{margin:0 0 .45rem;color:#ffb84d;font-size:1rem;font-weight:700;letter-spacing:.02em}
+.idem-alert .idem-body{margin:0 0 .25rem;font-size:.78rem;opacity:.95;line-height:1.45}
+.idem-alert .idem-accion{margin:0 0 .75rem;font-size:.78rem;color:#ffd699;font-weight:600}
+.idem-metric-card{border-color:rgba(255,180,60,.4)!important}
+.idem-metric-card .stat-value.warn{color:#ffb84d;font-size:1.35rem}
+.chaos-box{display:none!important}
 .idem-key{font-family:ui-monospace,monospace;font-size:.68rem;word-break:break-all;margin:.35rem 0;padding:.35rem .5rem;background:rgba(0,0,0,.25);border-radius:6px}
 .idem-actions{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.35rem}
 .idem-actions button{font-size:.68rem;padding:.35rem .55rem;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:inherit;cursor:pointer}
@@ -1345,6 +1349,16 @@ input[type="range"]::-webkit-slider-thumb {
               <div class="stat-card"><div class="stat-label">Operaciones</div><div class="stat-value" id="tradesCount">0</div></div>
               <div class="stat-card"><div class="stat-label">Profit / Loss</div><div class="stat-value" id="profitLoss">$0.00</div></div>
               <div class="stat-card"><div class="stat-label">Win Rate</div><div class="stat-value" id="winRate">0%</div></div>
+              <div class="stat-card idem-metric-card" id="uncertainStatCard" style="display:none">
+                <div class="stat-label">Operaciones inciertas</div>
+                <div class="stat-value warn" id="uncertainStatCount">0</div>
+              </div>
+            </div>
+            <div class="idem-alert" id="idemAlertResumen" style="margin-top:1rem">
+              <div class="idem-title" id="idemResumenTitle">⚠️ 1 operación incierta</div>
+              <p class="idem-body" id="idemResumenBody">El sistema bloqueó automáticamente una posible duplicación.</p>
+              <p class="idem-accion" id="idemResumenAccion">Requiere reconciliación.</p>
+              <button type="button" class="btn-action blue" style="margin-top:.4rem" onclick="showDashSection('nucleo')">Ir a reconciliar en Núcleo 24/7</button>
             </div>
           </div>
         </section>
@@ -1420,13 +1434,15 @@ input[type="range"]::-webkit-slider-thumb {
                 <div class="tele-cell"><span class="k">Próximo ciclo</span><span class="v" id="serverCountdown">—</span></div>
                 <div class="tele-cell"><span class="k">Intervalo</span><span class="v"><span id="serverInterval">5</span> min</span></div>
                 <div class="tele-cell"><span class="k">Análisis / trades</span><span class="v" id="serverCycleStats">0 / 0</span></div>
+                <div class="tele-cell"><span class="k">Inciertas</span><span class="v" id="serverUncertainCount">0</span></div>
               </div>
               <div class="tele-reason" id="serverLastReason">El núcleo está detenido. Iniciá 24/7 para ver el pulso en vivo.</div>
               <div class="tele-heartbeat" id="serverHeartbeat">Sin heartbeat</div>
               <div class="tele-bars" id="serverBars"></div>
               <div class="idem-alert" id="idemAlert">
-                <h4>⚠ IDEMPOTENCIA · uncertain_crash</h4>
-                <p id="idemAlertMsg">Hay operaciones en estado incierto tras un crash. No se recompran.</p>
+                <div class="idem-title" id="idemAlertTitle">⚠️ 1 operación incierta</div>
+                <p class="idem-body" id="idemAlertMsg">El sistema bloqueó automáticamente una posible duplicación.</p>
+                <p class="idem-accion" id="idemAlertAccion">Requiere reconciliación.</p>
                 <div id="idemAlertList"></div>
               </div>
               <div class="chaos-box" id="chaosBox">
@@ -2301,27 +2317,49 @@ async function limpiarChaos() {
 }
 
 function pintarIdempotencia(data) {
-  var box = document.getElementById('idemAlert');
-  var list = document.getElementById('idemAlertList');
-  var msg = document.getElementById('idemAlertMsg');
-  if (!box || !list) return;
-  var alerta = (data && data.idempotencia_alerta) || (data && data.estado_vivo && data.estado_vivo.idempotencia_alerta);
+  var alerta = (data && data.idempotencia_alerta) || (data && data.estado_vivo && data.estado_vivo.idempotencia_alerta) || null;
   var items = (data && data.idempotencia_uncertain) || [];
-  if ((!alerta || !alerta.count) && (!items || !items.length)) {
-    box.classList.remove('show');
-    list.innerHTML = '';
-    return;
+  var obs = (data && data.observabilidad) || {};
+  var count = (alerta && alerta.count) || items.length || obs.uncertain || 0;
+  var titulo = (alerta && alerta.titulo) || (count === 1 ? '⚠️ 1 operación incierta' : ('⚠️ ' + count + ' operaciones inciertas'));
+  var cuerpo = (alerta && alerta.mensaje) || 'El sistema bloqueó automáticamente una posible duplicación.';
+  var accion = (alerta && alerta.accion) || 'Requiere reconciliación.';
+  var show = count > 0;
+
+  function fillBox(boxId, titleId, msgId, accionId, listId, withActions) {
+    var box = document.getElementById(boxId);
+    if (!box) return;
+    if (!show) { box.classList.remove('show'); return; }
+    box.classList.add('show');
+    var t = document.getElementById(titleId); if (t) t.textContent = titulo;
+    var m = document.getElementById(msgId); if (m) m.textContent = cuerpo;
+    var a = document.getElementById(accionId); if (a) a.textContent = accion;
+    var list = listId ? document.getElementById(listId) : null;
+    if (list && withActions) {
+      list.innerHTML = (items || []).map(function(it) {
+        var k = it.key || '';
+        return '<div class="idem-key">' + k +
+          '<div class="idem-actions">' +
+          '<button type="button" class="ok" onclick="resolverIdempotencia(\'' + k + '\', \'resolved_no_trade\')">Resolver: no hubo trade</button>' +
+          '<button type="button" class="warn" onclick="resolverIdempotencia(\'' + k + '\', \'resolved_placed\')">Resolver: sí hubo trade</button>' +
+          '</div></div>';
+      }).join('') || '';
+    }
   }
-  box.classList.add('show');
-  if (msg && alerta && alerta.mensaje) msg.textContent = alerta.mensaje;
-  list.innerHTML = (items || []).map(function(it) {
-    var k = it.key || '';
-    return '<div class="idem-key">' + k +
-      '<div class="idem-actions">' +
-      '<button type="button" class="ok" onclick="resolverIdempotencia(\'' + k + '\', \'resolved_no_trade\')">Resolver: no hubo trade</button>' +
-      '<button type="button" class="warn" onclick="resolverIdempotencia(\'' + k + '\', \'resolved_placed\')">Resolver: sí hubo trade</button>' +
-      '</div></div>';
-  }).join('') || '<div class="idem-key">(keys en alerta)</div>';
+  fillBox('idemAlert', 'idemAlertTitle', 'idemAlertMsg', 'idemAlertAccion', 'idemAlertList', true);
+  fillBox('idemAlertResumen', 'idemResumenTitle', 'idemResumenBody', 'idemResumenAccion', null, false);
+
+  var uc = document.getElementById('serverUncertainCount');
+  if (uc) {
+    uc.textContent = String(count);
+    uc.style.color = count > 0 ? '#ffb84d' : '';
+  }
+  var card = document.getElementById('uncertainStatCard');
+  var cardN = document.getElementById('uncertainStatCount');
+  if (card && cardN) {
+    card.style.display = show ? '' : 'none';
+    cardN.textContent = String(count);
+  }
   var chaosEl = document.getElementById('chaosArmStatus');
   if (chaosEl) {
     var arm = data && data.chaos_arm;

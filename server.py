@@ -654,6 +654,7 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                 'idempotencia_alerta': (estado_vivo or {}).get('idempotencia_alerta'),
                 'idempotencia_uncertain': database.list_uncertain_idempotency(),
                 'chaos_arm': database.get_chaos_arm(),
+                'observabilidad': database.observabilidad_stats(),
                 'ultima_operacion': database.obtener_ultima_operacion_bot(),
                 'ultima_operacion_timestamp': bot_stats.get('ultima_operacion_timestamp'),
                 'proxima_operacion_timestamp': proxima_operacion,
