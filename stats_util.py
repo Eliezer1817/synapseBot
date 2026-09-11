@@ -33,6 +33,14 @@ def _extract_closed(op: dict) -> Optional[dict]:
     """Devuelve dict normalizado si la op cerró con PnL conocido."""
     if not op:
         return None
+    if isinstance(op.get("resultado"), dict) and (
+        op["resultado"].get("resultado_trade") or op["resultado"].get("ejecutado") or op["resultado"].get("decision")
+    ):
+        # a veces se guardó el wrapper del bot
+        inner = op["resultado"]
+        got = _extract_closed(inner)
+        if got:
+            return got
     decision = (op.get("decision") or "").upper()
     # SKIP / errores sin trade no cuentan como operación cerrada
     rt = op.get("resultado_trade") or op.get("resultado") or {}
@@ -74,8 +82,19 @@ def _extract_closed(op: dict) -> Optional[dict]:
 
 def compute_stats(operaciones: List[dict]) -> Dict[str, Any]:
     closed = []
+    skips = 0
+    analizados = 0
     for op in operaciones or []:
-        n = _extract_closed(op)
+        # unwrap if stored as {resultado: {...}}
+        raw = op.get('resultado') if isinstance(op.get('resultado'), dict) and 'decision' in op.get('resultado', {}) else op
+        analizados += 1
+        decision = (raw.get('decision') or op.get('decision') or '').upper()
+        if decision == 'SKIP' or (not raw.get('ejecutado') and 'CALL' not in decision and 'PUT' not in decision):
+            if decision == 'SKIP' or raw.get('ejecutado') is False:
+                skips += 1
+        n = _extract_closed(raw)
+        if not n:
+            n = _extract_closed(op)
         if n:
             closed.append(n)
     closed.sort(key=lambda x: x["ts"])
@@ -183,6 +202,8 @@ def compute_stats(operaciones: List[dict]) -> Dict[str, Any]:
 
     return {
         "operaciones": n,
+        "analizados": analizados,
+        "skips": skips,
         "wins": len(wins),
         "losses": len(losses),
         "evens": len(evens),

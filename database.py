@@ -56,15 +56,23 @@ def save_database(data):
             json.dump(data, f, indent=2, ensure_ascii=False)
         os.replace(tmp, DB_FILE)
 
+def _normalize_operacion(operacion):
+    """Aplana wrappers {resultado: ...} y asegura timestamp."""
+    op = dict(operacion or {})
+    if isinstance(op.get('resultado'), dict) and op['resultado'].get('decision') and not op.get('decision'):
+        inner = dict(op['resultado'])
+        inner.setdefault('timestamp', op.get('timestamp') or time.time())
+        op = inner
+    if 'timestamp' not in op:
+        op['timestamp'] = time.time()
+    if 'fecha_hora' not in op:
+        op['fecha_hora'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    return op
+
 def agregar_operacion(operacion):
     """Agregar una operación al historial"""
     data = load_database()
-    
-    # Agregar timestamp si no existe
-    if 'timestamp' not in operacion:
-        operacion['timestamp'] = time.time()
-        operacion['fecha_hora'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    
+    operacion = _normalize_operacion(operacion)
     data['operaciones'].append(operacion)
     
     # Mantener solo las últimas 100 operaciones

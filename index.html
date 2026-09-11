@@ -1363,7 +1363,8 @@ input[type="range"]::-webkit-slider-thumb {
             <p class="section-lead">Vista rápida del estado de la sesión.</p>
             <div class="stats-grid">
               <div class="stat-card"><div class="stat-label">Balance Total</div><div class="stat-value" id="totalBalance">$0.00</div></div>
-              <div class="stat-card"><div class="stat-label">Operaciones</div><div class="stat-value" id="tradesCount">0</div></div>
+              <div class="stat-card"><div class="stat-label">Cerradas (WIN/LOSS)</div><div class="stat-value" id="tradesCount">0</div></div>
+              <div class="stat-card"><div class="stat-label">Análisis / SKIP</div><div class="stat-value" id="analizadosVal">0 / 0</div></div>
               <div class="stat-card"><div class="stat-label">Wins / Losses</div><div class="stat-value" id="wlCount">0 / 0</div></div>
               <div class="stat-card"><div class="stat-label">Profit / Loss</div><div class="stat-value" id="profitLoss">$0.00</div></div>
               <div class="stat-card"><div class="stat-label">Win Rate</div><div class="stat-value" id="winRate">0%</div></div>
@@ -1392,7 +1393,7 @@ input[type="range"]::-webkit-slider-thumb {
               </div>
               <div>
                 <h3 class="panel-title" style="font-size:.85rem">Cerradas (incluye pérdidas)</h3>
-                <div class="closed-list" id="closedTradesList"><div class="empty-history">Sin operaciones cerradas aún</div></div>
+                <div class="closed-list" id="closedTradesList"><div class="empty-history">Sin WIN/LOSS cerrados aún. Los SKIP no cuentan como cerradas. Si acabás de redeployar sin volume, el historial del servidor empieza vacío.</div></div>
               </div>
             </div>
             <div class="idem-alert" id="idemAlertResumen" style="margin-top:1rem">
@@ -2651,6 +2652,30 @@ async function reconciliarIdempotencia(key) {
   } catch (e) { alert('Error: ' + e); }
 }
 
+async function cargarHistorialServidor() {
+  try {
+    const res = await fetch('/historial_operaciones?limit=100', { headers: getAuthHeaders() });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.success || !Array.isArray(data.historial)) return;
+    // Map server ops into appState shape for Historial panel
+    appState.trades = data.historial.map(function(op) {
+      var rt = op.resultado_trade || op.resultado || null;
+      return {
+        decision: op.decision || '—',
+        probabilidad: op.probabilidad || 'N/A',
+        modo: op.modo || 'demo',
+        ejecutado: !!op.ejecutado,
+        trade_id: op.trade_id,
+        resultado: rt,
+        monto: op.monto_calculado || op.monto || 0,
+        timestamp: op.fecha_hora || (op.timestamp ? new Date((op.timestamp<1e12?op.timestamp*1000:op.timestamp)).toLocaleString() : '—')
+      };
+    });
+    renderHistorial();
+  } catch (e) {}
+}
+
 async function cargarEstadisticasReales() {
   try {
     const res = await fetch('/estadisticas_reales', { headers: getAuthHeaders() });
@@ -2658,6 +2683,7 @@ async function cargarEstadisticasReales() {
     const data = await res.json();
     if (!data.success || !data.stats) return;
     pintarEstadisticasReales(data.stats);
+    cargarHistorialServidor();
   } catch (e) {}
 }
 
@@ -2665,6 +2691,7 @@ function pintarEstadisticasReales(s) {
   var n = s.operaciones || 0;
   var el;
   el = document.getElementById('tradesCount'); if (el) el.textContent = n;
+  el = document.getElementById('analizadosVal'); if (el) el.textContent = (s.analizados||0) + ' / ' + (s.skips||0);
   el = document.getElementById('wlCount'); if (el) el.textContent = (s.wins||0) + ' / ' + (s.losses||0);
   el = document.getElementById('profitLoss');
   if (el) {
@@ -2726,7 +2753,7 @@ function pintarEstadisticasReales(s) {
   var list = document.getElementById('closedTradesList');
   if (list) {
     var rows = s.closed_trades || [];
-    if (!rows.length) list.innerHTML = '<div class="empty-history">Sin operaciones cerradas aún</div>';
+    if (!rows.length) list.innerHTML = '<div class="empty-history">Sin WIN/LOSS cerrados aún. Los SKIP no cuentan como cerradas. Si acabás de redeployar sin volume, el historial del servidor empieza vacío.</div>';
     else list.innerHTML = rows.map(function(t) {
       var pnl = Number(t.pnl || 0);
       var when = t.ts ? new Date((t.ts < 1e12 ? t.ts*1000 : t.ts)).toLocaleString() : '—';
