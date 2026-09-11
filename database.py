@@ -8,7 +8,28 @@ import crypto_util
 
 _DB_LOCK = threading.RLock()
 
-DB_FILE = 'trading_data.json'
+# Persistencia: en Fly montamos un volume en /data (SYNAPSE_DATA_DIR).
+DATA_DIR = os.environ.get('SYNAPSE_DATA_DIR') or (
+    '/data' if os.path.isdir('/data') else os.path.dirname(os.path.abspath(__file__)) or '.'
+)
+os.makedirs(DATA_DIR, exist_ok=True)
+DB_FILE = os.path.join(DATA_DIR, 'trading_data.json')
+
+def _maybe_migrate_legacy_db():
+    """Si el JSON legacy quedó en /app, copiarlo una vez al volume."""
+    legacy = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'trading_data.json')
+    if legacy == DB_FILE:
+        return
+    if os.path.exists(DB_FILE) or not os.path.exists(legacy):
+        return
+    try:
+        import shutil
+        shutil.copy2(legacy, DB_FILE)
+        print(f"📦 Migrado trading_data.json → {DB_FILE}")
+    except Exception as e:
+        print(f"⚠️ No se pudo migrar trading_data.json: {e}")
+
+_maybe_migrate_legacy_db()
 
 def init_database():
     """Inicializar la base de datos si no existe"""

@@ -2765,21 +2765,8 @@ function pintarEstadisticasReales(s) {
 }
 
 function actualizarEstadisticas() {
-
-  let wins = 0, losses = 0, profit = 0;
-  const operacionesConResultado = appState.trades.filter(trade => trade.ejecutado && trade.resultado && trade.resultado.finalizada);
-  operacionesConResultado.forEach(trade => {
-    if (trade.resultado.win) wins++; else losses++;
-    profit += trade.resultado.ganancia;
-  });
-  appState.stats = { wins, losses, profit };
-  document.getElementById('tradesCount').textContent = operacionesConResultado.length;
-  const profitEl = document.getElementById('profitLoss');
-  profitEl.textContent = `$${profit.toFixed(2)}`;
-  profitEl.className = 'stat-value ' + (profit >= 0 ? 'positive' : 'negative');
-  const total = wins + losses;
-  const winRate = total > 0 ? ((wins / total) * 100).toFixed(1) : 0;
-  document.getElementById('winRate').textContent = `${winRate}%`;
+  // Fuente de verdad: historial del servidor (no el array local del browser)
+  cargarEstadisticasReales();
 }
 
 function clearHistory() {

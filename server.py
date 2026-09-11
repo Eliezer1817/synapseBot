@@ -16,6 +16,24 @@ import crypto_util
 
 PORT = int(os.environ.get("PORT", 8000))
 CWD = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.environ.get("SYNAPSE_DATA_DIR") or (
+    "/data" if os.path.isdir("/data") else CWD
+)
+os.makedirs(DATA_DIR, exist_ok=True)
+
+def _migrate_legacy_sessions():
+    legacy = os.path.join(CWD, "sessions.json")
+    dest = os.path.join(DATA_DIR, "sessions.json")
+    if legacy == dest or os.path.exists(dest) or not os.path.exists(legacy):
+        return
+    try:
+        import shutil
+        shutil.copy2(legacy, dest)
+        print(f"📦 Migrado sessions.json → {dest}")
+    except Exception as e:
+        print(f"⚠️ No se pudo migrar sessions.json: {e}")
+
+_migrate_legacy_sessions()
 
 # CORS: solo orígenes explícitos (override con SYNAPSE_CORS_ORIGINS, separados por coma)
 _DEFAULT_CORS = (
@@ -55,7 +73,7 @@ class SessionManager:
 
     @staticmethod
     def _sessions_path():
-        return os.path.join(CWD, 'sessions.json')
+        return os.path.join(DATA_DIR, 'sessions.json')
 
     @staticmethod
     def _load_persisted():
@@ -812,6 +830,8 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                 
                 if requested_path.endswith(".html"):
                     self.send_header('Content-type', 'text/html; charset=utf-8')
+                    self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+                    self.send_header('Pragma', 'no-cache')
                 elif requested_path.endswith(".css"):
                     self.send_header('Content-type', 'text/css')
                 elif requested_path.endswith(".js"):
@@ -1455,6 +1475,7 @@ def run_server(port=PORT):
         print("="*70)
         print(f"🌐 URL: http://localhost:{port}")
         print(f"📂 Directorio: {CWD}")
+        print(f"💾 Datos persistentes: {DATA_DIR}")
         print(f"🔐 Sistema de sesiones activado")
         print(f"🌐 CORS allowlist: {sorted(ALLOWED_ORIGINS)}")
         print(f"🤖 BOT 24/7 ACTIVADO - INDEPENDIENTE DEL CLIENTE")

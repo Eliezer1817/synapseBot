@@ -17,3 +17,11 @@ primary_region = 'iad'
   cpu_kind = 'shared'
   cpus = 1
   memory_mb = 256
+
+[env]
+  SYNAPSE_DATA_DIR = '/data'
+
+[[mounts]]
+  source = 'synapse_data'
+  destination = '/data'
+
