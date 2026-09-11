@@ -68,8 +68,8 @@ def agregar_operacion(operacion):
     data['operaciones'].append(operacion)
     
     # Mantener solo las últimas 100 operaciones
-    if len(data['operaciones']) > 100:
-        data['operaciones'] = data['operaciones'][-100:]
+    if len(data['operaciones']) > 300:
+        data['operaciones'] = data['operaciones'][-300:]
     
     save_database(data)
     return operacion
@@ -439,3 +439,20 @@ def observabilidad_stats():
     counts['uncertain'] = counts['uncertain_crash']
     counts['requiere_reconciliacion'] = counts['uncertain_crash']
     return counts
+
+
+def calcular_estadisticas_reales(limit=500):
+    import stats_util
+    ops = obtener_historial(limit=limit)
+    # obtener_historial ya ordena desc; stats_util reordena
+    data = load_database()
+    all_ops = data.get('operaciones') or ops
+    return stats_util.compute_stats(all_ops)
+
+
+def unresolved_uncertain_count():
+    return len(list_uncertain_idempotency())
+
+
+def get_idempotency_entry(key):
+    return get_idempotency(key)

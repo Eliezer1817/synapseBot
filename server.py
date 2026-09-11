@@ -664,6 +664,33 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
             }).encode('utf-8'))
             return
 
+        elif self.path.split('?')[0] == '/estadisticas_reales':
+            session = get_authenticated_session(self)
+            if not session:
+                self.send_response(401)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': 'No autorizado'}).encode('utf-8'))
+                return
+            try:
+                stats = database.calcular_estadisticas_reales()
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'success': True,
+                    'stats': stats,
+                    'uncertain': database.list_uncertain_idempotency(),
+                    'idempotencia_alerta': database.obtener_estado_vivo().get('idempotencia_alerta'),
+                }).encode('utf-8'))
+            except Exception as e:
+                print(f"❌ Error en /estadisticas_reales: {e}")
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': crypto_util.safe_client_error(e)}).encode('utf-8'))
+            return
+
         elif self.path == '/historial_operaciones':
             session = get_authenticated_session(self)
             if not session:
@@ -1080,6 +1107,12 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                     config = json.loads(post_data.decode('utf-8'))
 
                     with bot_start_lock:
+                        unc = database.unresolved_uncertain_count()
+                        if unc > 0:
+                            raise Exception(
+                                f"Hay {unc} operación(es) incierta(s). "
+                                "Reconciliá con la cuenta IQ o resolvé manualmente antes de continuar."
+                            )
                         if database.esta_activo_bot_servidor() or (
                             bot_servidor_thread and bot_servidor_thread.is_alive()
                         ):
@@ -1209,6 +1242,78 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                     self.wfile.write(json.dumps({
                         'success': False,
                         'error': crypto_util.safe_client_error(e, 'No se pudo resolver'),
+                    }).encode('utf-8'))
+
+
+            elif self.path == '/reconciliar_idempotencia':
+                try:
+                    session = get_authenticated_session(self)
+                    if not session:
+                        raise Exception('No autorizado')
+                    content_length = int(self.headers.get('Content-Length', 0))
+                    body = json.loads(self.rfile.read(content_length).decode('utf-8') if content_length else '{}')
+                    key = (body.get('key') or '').strip()
+                    entry = database.get_idempotency(key)
+                    if not entry:
+                        raise Exception('key no encontrada')
+                    if entry.get('status') != 'uncertain_crash':
+                        raise Exception('solo se reconcilian uncertain_crash')
+                    trade_id = entry.get('trade_id') or body.get('trade_id')
+                    monto = entry.get('monto')
+                    from operar import reconciliar_trade_id
+                    iq = session.get('iq')
+                    result = reconciliar_trade_id(iq, trade_id, monto=monto)
+                    resolution = None
+                    if result.get('found') and result.get('finalizada'):
+                        resolution = 'resolved_placed'
+                        database.finalize_idempotency(key, 'uncertain_crash', iq_reconcile=result)
+                        database.resolve_idempotency(
+                            key,
+                            'resolved_placed',
+                            note=f"IQ reconcile: pnl={result.get('ganancia')} via {result.get('source')}",
+                        )
+                        # registrar en historial si hay pnl
+                        try:
+                            database.agregar_operacion({
+                                'decision': key.split(':')[-1] if key else 'CALL',
+                                'ejecutado': True,
+                                'trade_id': trade_id,
+                                'probabilidad': 'N/A',
+                                'modo': entry.get('modo') or 'demo',
+                                'resultado_trade': {
+                                    'finalizada': True,
+                                    'ganancia': result.get('ganancia') or 0,
+                                    'win': bool(result.get('win')),
+                                    'id': trade_id,
+                                    'reconciled': True,
+                                },
+                                'timestamp': time.time(),
+                                'fuente': 'reconciliacion_iq',
+                            })
+                        except Exception:
+                            pass
+                    elif result.get('found') is False and 'no aparece' in (result.get('mensaje') or '').lower():
+                        # no evidencia en historial reciente → tratar como no hubo trade visible
+                        resolution = None
+                        # leave uncertain; client can mark no_trade manually
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'success': True,
+                        'key': key,
+                        'iq': result,
+                        'auto_resolved': resolution,
+                        'idempotencia_alerta': database.obtener_estado_vivo().get('idempotencia_alerta'),
+                        'uncertain': database.list_uncertain_idempotency(),
+                    }).encode('utf-8'))
+                except Exception as e:
+                    self.send_response(400)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'success': False,
+                        'error': crypto_util.safe_client_error(e, 'No se pudo reconciliar'),
                     }).encode('utf-8'))
 
             elif self.path == '/chaos_arm':

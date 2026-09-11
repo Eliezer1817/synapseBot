@@ -950,6 +950,23 @@ input[type="range"]::-webkit-slider-thumb {
 .chaos-box h4{margin:0 0 .4rem;font-size:.8rem;color:#8ec5ff}
 .chaos-box p{margin:0 0 .55rem;font-size:.7rem;opacity:.85}
 .chaos-box select,.chaos-box button{font-size:.72rem;padding:.35rem .55rem;margin-right:.35rem;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:rgba(0,0,0,.25);color:inherit}
+
+.stats-extra{margin-top:1.2rem;display:grid;gap:1rem}
+.stats-extra-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.75rem}
+.stat-mini{padding:.75rem .85rem;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:rgba(0,0,0,.22)}
+.stat-mini .k{display:block;font-size:.65rem;opacity:.65;letter-spacing:.06em;text-transform:uppercase;margin-bottom:.25rem}
+.stat-mini .v{font-size:1.05rem;font-weight:700}
+.stat-mini .v.neg{color:#ff6b6b}
+.stat-mini .v.pos{color:#5dffb0}
+.bars-row{display:flex;align-items:flex-end;gap:3px;height:72px;margin-top:.5rem}
+.bars-row span{flex:1;min-width:0;background:rgba(255,140,0,.35);border-radius:3px 3px 0 0;position:relative}
+.bars-row span.neg{background:rgba(255,80,80,.45)}
+.bars-row span.pos{background:rgba(80,220,140,.45)}
+.bars-legend{display:flex;justify-content:space-between;font-size:.6rem;opacity:.55;margin-top:.25rem}
+.closed-list{max-height:280px;overflow:auto;margin-top:.75rem}
+.closed-item{display:flex;justify-content:space-between;gap:.75rem;padding:.45rem .55rem;border-bottom:1px solid rgba(255,255,255,.06);font-size:.75rem}
+.closed-item .pnl.pos{color:#5dffb0}
+.closed-item .pnl.neg{color:#ff6b6b}
 </style>
 </head>
 <body>
@@ -1347,11 +1364,35 @@ input[type="range"]::-webkit-slider-thumb {
             <div class="stats-grid">
               <div class="stat-card"><div class="stat-label">Balance Total</div><div class="stat-value" id="totalBalance">$0.00</div></div>
               <div class="stat-card"><div class="stat-label">Operaciones</div><div class="stat-value" id="tradesCount">0</div></div>
+              <div class="stat-card"><div class="stat-label">Wins / Losses</div><div class="stat-value" id="wlCount">0 / 0</div></div>
               <div class="stat-card"><div class="stat-label">Profit / Loss</div><div class="stat-value" id="profitLoss">$0.00</div></div>
               <div class="stat-card"><div class="stat-label">Win Rate</div><div class="stat-value" id="winRate">0%</div></div>
+              <div class="stat-card"><div class="stat-label">Expectancy</div><div class="stat-value" id="expectancyVal">$0.00</div></div>
+              <div class="stat-card"><div class="stat-label">Profit Factor</div><div class="stat-value" id="profitFactorVal">—</div></div>
+              <div class="stat-card"><div class="stat-label">Max Drawdown</div><div class="stat-value" id="maxDdVal">$0.00</div></div>
+              <div class="stat-card"><div class="stat-label">Racha W / L</div><div class="stat-value" id="streakVal">0 / 0</div></div>
               <div class="stat-card idem-metric-card" id="uncertainStatCard" style="display:none">
                 <div class="stat-label">Operaciones inciertas</div>
                 <div class="stat-value warn" id="uncertainStatCount">0</div>
+              </div>
+            </div>
+            <div class="stats-extra">
+              <div>
+                <h3 class="panel-title" style="font-size:.85rem">Resultados por hora (UTC)</h3>
+                <div class="bars-row" id="hourBars"></div>
+                <div class="bars-legend"><span>0h</span><span>12h</span><span>23h</span></div>
+              </div>
+              <div>
+                <h3 class="panel-title" style="font-size:.85rem">Resultados por score</h3>
+                <div class="stats-extra-grid" id="scoreStats"></div>
+              </div>
+              <div>
+                <h3 class="panel-title" style="font-size:.85rem">Por señal</h3>
+                <div class="stats-extra-grid" id="sideStats"></div>
+              </div>
+              <div>
+                <h3 class="panel-title" style="font-size:.85rem">Cerradas (incluye pérdidas)</h3>
+                <div class="closed-list" id="closedTradesList"><div class="empty-history">Sin operaciones cerradas aún</div></div>
               </div>
             </div>
             <div class="idem-alert" id="idemAlertResumen" style="margin-top:1rem">
@@ -1953,7 +1994,7 @@ function restoreDashboard(userData) {
   document.getElementById('dashboard').classList.remove('hidden');
   restoreDashSection();
   mostrarPanelNucleo();
-  iniciarMonitorServidor(true);
+  iniciarMonitorServidor(true); cargarEstadisticasReales();
 }
 
 async function logout() {
@@ -2015,7 +2056,7 @@ async function login() {
     document.getElementById('dashboard').classList.remove('hidden');
     restoreDashSection();
     mostrarPanelNucleo();
-    iniciarMonitorServidor(true);
+    iniciarMonitorServidor(true); cargarEstadisticasReales();
 
   } catch (err) {
     alert('❌ Error: ' + err.message);
@@ -2208,7 +2249,7 @@ async function iniciarBotServidor() {
     document.getElementById('serverInterval').textContent = intervalo;
     document.getElementById('serverMode').textContent = modo.toUpperCase();
     document.getElementById('serverActivity').textContent = 'Núcleo iniciado. Conectando y armando el primer ciclo...';
-    iniciarMonitorServidor(true);
+    iniciarMonitorServidor(true); cargarEstadisticasReales();
     alert('✅ Bot 24/7 iniciado en servidor');
   } catch (err) {
     alert('❌ Error: ' + err.message);
@@ -2340,6 +2381,7 @@ function pintarIdempotencia(data) {
         var k = it.key || '';
         return '<div class="idem-key">' + k +
           '<div class="idem-actions">' +
+          '<button type="button" class="warn" onclick="reconciliarIdempotencia(\'' + k + '\')">Reconciliar con IQ</button>' +
           '<button type="button" class="ok" onclick="resolverIdempotencia(\'' + k + '\', \'resolved_no_trade\')">Resolver: no hubo trade</button>' +
           '<button type="button" class="warn" onclick="resolverIdempotencia(\'' + k + '\', \'resolved_placed\')">Resolver: sí hubo trade</button>' +
           '</div></div>';
@@ -2456,6 +2498,7 @@ function pintarPulsoServidor(data) {
     }).join('');
   }
   pintarIdempotencia(data);
+  cargarEstadisticasReales();
 }
 
 function iniciarMonitorServidor(forceImmediate) {
@@ -2589,7 +2632,113 @@ function renderHistorial() {
   }).join('');
 }
 
+async function reconciliarIdempotencia(key) {
+  try {
+    const res = await fetch('/reconciliar_idempotencia', {
+      method: 'POST',
+      headers: Object.assign({'Content-Type': 'application/json'}, getAuthHeaders()),
+      body: JSON.stringify({ key: key })
+    });
+    const data = await res.json();
+    if (!data.success) { alert(data.error || 'No se pudo reconciliar'); return; }
+    if (data.auto_resolved) {
+      alert('Reconciliado con IQ: ' + data.auto_resolved + (data.iq && data.iq.ganancia != null ? (' · PnL ' + data.iq.ganancia) : ''));
+    } else {
+      alert((data.iq && data.iq.mensaje) || 'IQ no confirmó el trade. Resolvé manualmente.');
+    }
+    verificarEstadoServidor();
+    cargarEstadisticasReales();
+  } catch (e) { alert('Error: ' + e); }
+}
+
+async function cargarEstadisticasReales() {
+  try {
+    const res = await fetch('/estadisticas_reales', { headers: getAuthHeaders() });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.success || !data.stats) return;
+    pintarEstadisticasReales(data.stats);
+  } catch (e) {}
+}
+
+function pintarEstadisticasReales(s) {
+  var n = s.operaciones || 0;
+  var el;
+  el = document.getElementById('tradesCount'); if (el) el.textContent = n;
+  el = document.getElementById('wlCount'); if (el) el.textContent = (s.wins||0) + ' / ' + (s.losses||0);
+  el = document.getElementById('profitLoss');
+  if (el) {
+    var pnl = Number(s.profit_loss || 0);
+    el.textContent = (pnl >= 0 ? '+$' : '-$') + Math.abs(pnl).toFixed(2);
+    el.className = 'stat-value ' + (pnl >= 0 ? 'positive' : 'negative');
+  }
+  el = document.getElementById('winRate'); if (el) el.textContent = (s.win_rate || 0).toFixed(1) + '%';
+  el = document.getElementById('expectancyVal');
+  if (el) {
+    var ex = Number(s.expectancy || 0);
+    el.textContent = (ex >= 0 ? '+$' : '-$') + Math.abs(ex).toFixed(2);
+    el.className = 'stat-value ' + (ex >= 0 ? 'positive' : 'negative');
+  }
+  el = document.getElementById('profitFactorVal');
+  if (el) el.textContent = s.profit_factor_infinite ? '∞' : (s.profit_factor != null ? Number(s.profit_factor).toFixed(2) : '—');
+  el = document.getElementById('maxDdVal');
+  if (el) {
+    el.textContent = '-$' + Math.abs(Number(s.max_drawdown || 0)).toFixed(2) + ' (' + (s.max_drawdown_pct || 0) + '%)';
+    el.className = 'stat-value negative';
+  }
+  el = document.getElementById('streakVal');
+  if (el) el.textContent = (s.racha_win_max||0) + ' / ' + (s.racha_loss_max||0) + (s.racha_actual_len ? (' · act ' + s.racha_actual_tipo + '×' + s.racha_actual_len) : '');
+
+  var bars = document.getElementById('hourBars');
+  if (bars && s.por_hora) {
+    var maxAbs = 1;
+    for (var h = 0; h < 24; h++) {
+      var p = Math.abs(Number((s.por_hora[String(h)] || {}).pnl || 0));
+      if (p > maxAbs) maxAbs = p;
+    }
+    bars.innerHTML = '';
+    for (var h = 0; h < 24; h++) {
+      var cell = s.por_hora[String(h)] || {pnl:0,n:0};
+      var pnl = Number(cell.pnl || 0);
+      var ht = Math.max(2, Math.round(Math.abs(pnl) / maxAbs * 68));
+      var span = document.createElement('span');
+      span.className = pnl < 0 ? 'neg' : (pnl > 0 ? 'pos' : '');
+      span.style.height = ht + 'px';
+      span.title = h + 'h UTC · n=' + (cell.n||0) + ' · pnl=' + pnl.toFixed(2);
+      bars.appendChild(span);
+    }
+  }
+
+  function fillMiniGrid(id, map, order) {
+    var box = document.getElementById(id);
+    if (!box || !map) return;
+    var keys = order || Object.keys(map);
+    box.innerHTML = keys.map(function(k) {
+      var c = map[k] || {n:0,pnl:0,wins:0,losses:0};
+      var pnl = Number(c.pnl || 0);
+      return '<div class="stat-mini"><span class="k">' + k + '</span><span class="v ' + (pnl<0?'neg':(pnl>0?'pos':'')) + '">' +
+        (pnl>=0?'+':'') + pnl.toFixed(2) + '</span><span class="k">' + (c.n||0) + ' ops · W' + (c.wins||0) + '/L' + (c.losses||0) + '</span></div>';
+    }).join('');
+  }
+  fillMiniGrid('scoreStats', s.por_score, ['0.75-1.00','0.50-0.75','0.00-0.50','n/a']);
+  fillMiniGrid('sideStats', s.por_senal, ['CALL','PUT']);
+
+  var list = document.getElementById('closedTradesList');
+  if (list) {
+    var rows = s.closed_trades || [];
+    if (!rows.length) list.innerHTML = '<div class="empty-history">Sin operaciones cerradas aún</div>';
+    else list.innerHTML = rows.map(function(t) {
+      var pnl = Number(t.pnl || 0);
+      var when = t.ts ? new Date((t.ts < 1e12 ? t.ts*1000 : t.ts)).toLocaleString() : '—';
+      return '<div class="closed-item"><span>' + (t.decision||'—') + ' · score ' + (t.score != null ? t.score : 'n/a') +
+        '<br><small>' + when + (t.trade_id ? (' · ID ' + t.trade_id) : '') + '</small></span>' +
+        '<span class="pnl ' + (pnl<0?'neg':'pos') + '">' + (pnl>=0?'+':'') + pnl.toFixed(2) + (t.win?' WIN':' LOSS') + '</span></div>';
+    }).join('');
+  }
+}
+
 function actualizarEstadisticas() {
+
   let wins = 0, losses = 0, profit = 0;
   const operacionesConResultado = appState.trades.filter(trade => trade.ejecutado && trade.resultado && trade.resultado.finalizada);
   operacionesConResultado.forEach(trade => {

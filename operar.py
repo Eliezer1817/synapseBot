@@ -600,3 +600,100 @@ def ejecutar_operacion(
             "error": str(e),
             "estadisticas_riesgo": gestor_riesgo.obtener_estadisticas(),
         }
+
+
+def reconciliar_trade_id(iq: IQ_Option, trade_id, monto: float = None) -> Dict[str, Any]:
+    """Contrasta un trade_id con IQ Option (at-most-once reconcile)."""
+    out = {
+        "found": False,
+        "source": None,
+        "trade_id": trade_id,
+        "finalizada": False,
+        "ganancia": None,
+        "win": None,
+        "raw": None,
+        "mensaje": "",
+    }
+    if trade_id is None or trade_id == "":
+        out["mensaje"] = "Sin trade_id para contrastar con IQ"
+        return out
+    try:
+        tid = int(trade_id)
+    except Exception:
+        tid = trade_id
+
+    # 1) check_win_v3
+    try:
+        r = iq.check_win_v3(tid)
+        out["raw"] = r
+        if isinstance(r, (int, float)):
+            out["found"] = True
+            out["source"] = "check_win_v3"
+            out["finalizada"] = True
+            out["ganancia"] = float(r)
+            out["win"] = float(r) > 0
+            out["mensaje"] = "Resultado obtenido vía check_win_v3"
+            return out
+        if r is None:
+            out["mensaje"] = "check_win_v3 sin resultado aún / no encontrado"
+    except Exception as e:
+        out["mensaje"] = f"check_win_v3 error: {e}"
+
+    # 2) get_async_order
+    try:
+        order = iq.get_async_order(tid)
+        if order:
+            out["found"] = True
+            out["source"] = "get_async_order"
+            out["raw"] = order
+            out["mensaje"] = "Orden encontrada en get_async_order (detalle parcial)"
+            # intentar profit fields comunes
+            for path in (("profit",), ("pnl",), ("win",), ("result",)):
+                pass
+            if isinstance(order, dict):
+                profit = order.get("profit") or order.get("pnl")
+                if profit is not None:
+                    out["finalizada"] = True
+                    out["ganancia"] = float(profit)
+                    out["win"] = float(profit) > 0
+            return out
+    except Exception as e:
+        out["mensaje"] = (out.get("mensaje") or "") + f" | get_async_order: {e}"
+
+    # 3) optioninfo recientes
+    try:
+        info = iq.get_optioninfo(30)
+        out["raw"] = info
+        rows = []
+        if isinstance(info, dict):
+            rows = info.get("msg") or info.get("result") or []
+            if isinstance(rows, dict):
+                rows = rows.get("items") or rows.get("data") or []
+        if isinstance(rows, list):
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                rid = row.get("id") or row.get("option_id") or row.get("external_id")
+                if str(rid) == str(tid):
+                    out["found"] = True
+                    out["source"] = "get_optioninfo"
+                    out["finalizada"] = True
+                    profit = row.get("profit") or row.get("pnl") or row.get("win_amount")
+                    if profit is None and monto is not None and row.get("win") in ("win", "loose", "lose", "equal"):
+                        w = str(row.get("win")).lower()
+                        if w == "win":
+                            profit = abs(float(monto)) * 0.8  # approx fallback unknown payout
+                        elif w in ("loose", "lose"):
+                            profit = -abs(float(monto))
+                        else:
+                            profit = 0.0
+                    if profit is not None:
+                        out["ganancia"] = float(profit)
+                        out["win"] = float(profit) > 0
+                    out["mensaje"] = "Encontrada en historial get_optioninfo"
+                    return out
+        out["mensaje"] = (out.get("mensaje") or "") + " | no aparece en optioninfo reciente"
+    except Exception as e:
+        out["mensaje"] = (out.get("mensaje") or "") + f" | optioninfo: {e}"
+
+    return out
