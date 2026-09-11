@@ -507,16 +507,46 @@ def ejecutar_operacion(
                 claimed, ikey = _db.claim_trade(ACTIVO, candle_ts, tipo_operacion, {
                     'modo': modo,
                     'monto': monto,
+                    'policy': _db.IDEM_POLICY,
                 })
                 resultado["idempotency_key"] = ikey
                 if not claimed:
-                    print(f"Idempotencia: {ikey} ya reclamada — no se recompra.", file=sys.stderr)
+                    existing = _db.get_idempotency(ikey) or {}
+                    st = existing.get('status', 'claimed')
+                    print(f"Idempotencia at-most-once: {ikey} status={st} — no se recompra.", file=sys.stderr)
                     resultado["decision"] = "SKIP"
-                    resultado["razon"] = f"Idempotencia: trade {tipo_operacion.upper()} ya intentado en esta vela"
+                    resultado["razon"] = (
+                        f"Idempotencia ({st}): trade {tipo_operacion.upper()} "
+                        f"ya intentado en esta vela — no recompra"
+                    )
                     resultado["ejecutado"] = False
+                    resultado["idempotency_status"] = st
                     return resultado
 
-            check, trade_id, mensaje = ejecutar_trade(iq, tipo_operacion, monto, ACTIVO)
+                # Punto de fuego: claimed → in_flight ANTES del buy.
+                # Si el proceso muere aquí o tras enviar sin respuesta: reconcile → uncertain_crash.
+                _db.finalize_idempotency(ikey, 'in_flight', phase='pre_buy')
+
+            check, trade_id, mensaje = False, None, 'no_buy'
+            try:
+                # Simulación de crash entre claim/in_flight y BUY (solo si env lo pide)
+                if enforce_idempotency and os.environ.get('SYNAPSE_SIMULATE_CRASH_AFTER_CLAIM', '').strip() == '1':
+                    raise SystemExit('SYNAPSE_SIMULATE_CRASH_AFTER_CLAIM: crash deliberado pre-BUY')
+                check, trade_id, mensaje = ejecutar_trade(iq, tipo_operacion, monto, ACTIVO)
+            except Exception as buy_exc:
+                if enforce_idempotency and resultado.get("idempotency_key"):
+                    import database as _db
+                    # Respuesta perdida / crash durante buy: NO reintentar (at-most-once)
+                    _db.finalize_idempotency(
+                        resultado["idempotency_key"],
+                        'uncertain_crash',
+                        phase='buy_exception',
+                        error=str(buy_exc)[:180],
+                        policy=_db.IDEM_POLICY,
+                    )
+                    resultado["idempotency_status"] = "uncertain_crash"
+                raise
+
             resultado["ejecutado"] = check
             resultado["trade_id"] = trade_id
             resultado["mensaje_trade"] = mensaje
@@ -527,8 +557,10 @@ def ejecutar_operacion(
                     resultado["idempotency_key"],
                     "placed" if check else "failed",
                     trade_id=trade_id,
-                    mensaje=mensaje,
+                    mensaje=str(mensaje)[:180] if mensaje is not None else None,
+                    policy=_db.IDEM_POLICY,
                 )
+                resultado["idempotency_status"] = "placed" if check else "failed"
 
             if check and trade_id:
                 resultado_trade = verificar_resultado(iq, trade_id, monto)

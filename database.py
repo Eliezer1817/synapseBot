@@ -187,11 +187,18 @@ def esta_activo_bot_servidor():
 
 
 # ---------------------------------------------------------------------------
-# Idempotencia 24/7
-# Formato de key: v1:{activo}:{candle_open_unix}:{CALL|PUT|CYCLE}
-# CYCLE = vela ya analizada (SKIP o trade); CALL/PUT = intento de buy.
-# claim atómico: si la key existe, no se vuelve a ejecutar.
+# Idempotencia 24/7 — política AT-MOST-ONCE (nunca recompra la misma key)
+# Formato: v1:{activo}:{candle_open_unix}:{CALL|PUT|CYCLE}
+# Estados trade: claimed → in_flight → placed | failed | uncertain_crash
+# - claimed: key tomada, aún no se llamó a IQ buy
+# - in_flight: buy enviado / a punto de enviarse (crash aquí = no reintentar)
+# - placed / failed: respuesta conocida de IQ
+# - uncertain_crash: crash o respuesta perdida tras in_flight → NO recomprar
+# CYCLE: vela ya analizada; tampoco se reabre.
 # ---------------------------------------------------------------------------
+
+IDEM_POLICY = "at-most-once"
+IDEM_ORPHAN_STATUSES = frozenset({"claimed", "in_flight"})
 
 def _ensure_idempotencia(data):
     bot = data.setdefault('bot_servidor', {})
@@ -255,3 +262,56 @@ def claim_trade(activo, candle_open, direction, meta=None):
     direction = (direction or '').upper()
     key = f"v1:{activo}:{int(candle_open)}:{direction}"
     return claim_idempotency(key, meta), key
+
+
+def list_idempotency(limit=50):
+    store = _ensure_idempotencia(load_database())
+    items = sorted(store.items(), key=lambda kv: kv[1].get('updated_at') or kv[1].get('ts') or 0, reverse=True)
+    return [{'key': k, **(v or {})} for k, v in items[:limit]]
+
+
+def reconcile_orphan_idempotency(min_age_sec=5):
+    """Tras restart: claimed/in_flight huérfanos → uncertain_crash (at-most-once).
+
+    Nunca borra la key ni permite recompra. Devuelve lista de keys marcadas.
+    """
+    with _DB_LOCK:
+        data = load_database()
+        store = _ensure_idempotencia(data)
+        now = time.time()
+        marked = []
+        for key, entry in list(store.items()):
+            if not isinstance(entry, dict):
+                continue
+            # CYCLE keys claimed sin done: también cerrar como uncertain si quedaron a medias
+            status = entry.get('status')
+            if status not in IDEM_ORPHAN_STATUSES:
+                continue
+            ts = float(entry.get('updated_at') or entry.get('ts') or 0)
+            if now - ts < min_age_sec:
+                continue
+            entry['status'] = 'uncertain_crash'
+            entry['updated_at'] = now
+            entry['policy'] = IDEM_POLICY
+            entry['reconcile_reason'] = (
+                'Orphan after restart/crash: at-most-once — no retry. '
+                'BUY may or may not have reached IQ Option.'
+            )
+            store[key] = entry
+            marked.append(key)
+        if marked:
+            data['bot_servidor']['idempotencia'] = store
+            # Señal visible en el pulso del dashboard
+            estado = data['bot_servidor'].setdefault('estado_vivo', {})
+            estado['idempotencia_alerta'] = {
+                'policy': IDEM_POLICY,
+                'uncertain_keys': marked[-10:],
+                'count': len(marked),
+                'ts': now,
+                'mensaje': (
+                    f'{len(marked)} operación(es) en estado incierto tras crash/restart. '
+                    'No se recompran (at-most-once).'
+                ),
+            }
+            save_database(data)
+        return marked

@@ -318,6 +318,16 @@ def ejecutar_bot_servidor():
         database.detener_bot_servidor()
         return
 
+    # At-most-once: cerrar claims/in_flight huérfanos de un crash previo
+    try:
+        orphans = database.reconcile_orphan_idempotency(min_age_sec=2)
+        if orphans:
+            print(f"⚠️ Idempotencia: {len(orphans)} key(s) → uncertain_crash (no recompra)")
+            for k in orphans[:5]:
+                print(f"   · {k}")
+    except Exception as rec_err:
+        print(f"⚠️ No se pudo reconciliar idempotencia: {rec_err}")
+
     try:
         print(f"🤖 Conectando bot ({crypto_util.mask_email(bot_credenciales['email'])}) a IQ Option...")
         iq_session = _connect(bot_credenciales['email'], bot_credenciales['password'])
@@ -633,6 +643,8 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                 'config': bot_config,
                 'estadisticas': bot_stats,
                 'estado_vivo': estado_vivo,
+                'idempotencia_policy': 'at-most-once',
+                'idempotencia_alerta': (estado_vivo or {}).get('idempotencia_alerta'),
                 'ultima_operacion': database.obtener_ultima_operacion_bot(),
                 'ultima_operacion_timestamp': bot_stats.get('ultima_operacion_timestamp'),
                 'proxima_operacion_timestamp': proxima_operacion,
