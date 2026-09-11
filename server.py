@@ -84,7 +84,7 @@ class SessionManager:
         creds = database.obtener_credenciales_bot() or {}
         if not email or creds.get('email') != email or not creds.get('password'):
             return None
-        print(f"🔄 Restaurando sesión de {email} tras reinicio de Fly...")
+        print(f"🔄 Restaurando sesión de {crypto_util.mask_email(email)} tras reinicio de Fly...")
         iq_session = _connect(email, creds['password'])
         active_sessions[token] = {
             'email': email,
@@ -269,7 +269,7 @@ def ejecutar_bot_servidor():
         return
 
     try:
-        print(f"🤖 Conectando bot ({bot_credenciales['email']}) a IQ Option...")
+        print(f"🤖 Conectando bot ({crypto_util.mask_email(bot_credenciales['email'])}) a IQ Option...")
         iq_session = _connect(bot_credenciales['email'], bot_credenciales['password'])
         print("✅ Bot conectado exitosamente.")
     except Exception as e:
@@ -347,7 +347,7 @@ def ejecutar_bot_servidor():
             print(f"\n{'='*60}")
             print(f"🤖 BOT SERVIDOR - CICLO {ciclo_numero}")
             print(f"{'='*60}")
-            print(f"👤 Usuario: {session_activa['email']}")
+            print(f"👤 Usuario: {crypto_util.mask_email(session_activa['email'])}")
             print(f"⏰ Hora actual: {time.strftime('%H:%M:%S')}")
             print(f"⏰ Próxima operación: {time.strftime('%H:%M:%S', time.localtime(siguiente_ciclo))}")
             print(f"{'='*60}")
@@ -685,27 +685,33 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                     
                     if not email or not password:
                         raise Exception("Email y password son requeridos")
+                    if not crypto_util.credentials_key_configured():
+                        raise Exception(
+                            "Falta SYNAPSE_CREDENTIALS_KEY en el servidor. "
+                            "Configurá el secret en Fly antes de iniciar sesión."
+                        )
                     
+                    masked = crypto_util.mask_email(email)
                     print(f"\n{'='*70}")
                     print(f"🔥 LOGIN REQUEST")
                     print(f"{'='*70}")
-                    print(f"📧 Email: {email}")
+                    print(f"📧 Email: {masked}")
                     print(f"{'='*70}\n")
 
                     # Verificar si ya hay sesión activa
                     if email in session_tokens:
                         existing_token = session_tokens[email]
                         SessionManager.delete_session(existing_token)
-                        print(f"🔄 Sesión anterior eliminada para {email}")
+                        print(f"🔄 Sesión anterior eliminada para {masked}")
 
                     # Conectar a IQ Option
                     print("⏳ Conectando a IQ Option...")
                     iq_session = _connect(email, password)
                     print("✅ Conexión establecida.")
 
-                    # Guardar credenciales para el bot 24/7
+                    # Guardar credenciales CIFRADAS para el bot 24/7
                     database.guardar_credenciales_bot({'email': email, 'password': password})
-                    print("🔐 Credenciales guardadas para el bot 24/7.")
+                    print("🔐 Credenciales cifradas guardadas para el bot 24/7.")
                     
                     # Obtener balances REALES
                     real_balance, demo_balance, real_id, demo_id = obtener_balances_reales(iq_session)
@@ -744,20 +750,21 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                     self.end_headers()
                     self.wfile.write(json.dumps(response_data).encode('utf-8'))
                     
-                    print(f"✅ LOGIN EXITOSO para {email}")
+                    print(f"✅ LOGIN EXITOSO para {crypto_util.mask_email(email)}")
                     print(f"💰 Balances - Real: ${real_balance}, Demo: ${demo_balance}\n")
 
                 except Exception as e:
-                    error_msg = str(e)
-                    print(f"❌ ERROR en login: {error_msg}")
+                    print(f"❌ ERROR en login: {crypto_util.safe_client_error(e)}")
                     traceback.print_exc()
-                    
+                    client_msg = crypto_util.safe_client_error(
+                        e, fallback="No se pudo iniciar sesión. Revisá credenciales o intentá de nuevo."
+                    )
                     self.send_response(500)
                     self.send_header('Content-type', 'application/json')
                     self.end_headers()
                     self.wfile.write(json.dumps({
                         'success': False, 
-                        'error': error_msg
+                        'error': client_msg
                     }).encode('utf-8'))
             
             elif self.path == '/logout':
@@ -1068,6 +1075,10 @@ def cleanup_sessions_periodically():
         SessionManager.cleanup_expired_sessions()
 
 def run_server(port=PORT):
+    # SYNAPSE_CREDENTIALS_KEY check
+    if not crypto_util.credentials_key_configured():
+        print("⚠️  SYNAPSE_CREDENTIALS_KEY no está configurada. El login rechazará guardar credenciales.")
+
     global bot_servidor_thread
 
     # Inicializar la base de datos

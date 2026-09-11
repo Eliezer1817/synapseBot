@@ -3,6 +3,8 @@ import os
 import time
 from datetime import datetime
 
+import crypto_util
+
 DB_FILE = 'trading_data.json'
 
 def init_database():
@@ -90,14 +92,33 @@ def guardar_config_bot(config):
     save_database(data)
 
 def obtener_credenciales_bot():
-    """Obtener credenciales del bot servidor"""
+    """Obtener credenciales del bot (password descifrada en memoria)."""
     data = load_database()
-    return data['bot_servidor'].get('credenciales')
+    creds = data['bot_servidor'].get('credenciales')
+    if not creds:
+        return None
+    out = dict(creds)
+    stored_pw = creds.get('password') or ''
+    encrypted = str(stored_pw).startswith(crypto_util.PREFIX)
+    if out.get('password'):
+        out['password'] = crypto_util.decrypt_secret(out['password'])
+        out['password_encrypted'] = encrypted
+        # Migración: si quedó en texto plano y hay clave, re-cifrar en disco
+        if (not encrypted) and crypto_util.credentials_key_configured() and out['password']:
+            try:
+                guardar_credenciales_bot({'email': out.get('email'), 'password': out['password']})
+                out['password_encrypted'] = True
+            except Exception:
+                pass
+    return out
 
 def guardar_credenciales_bot(credenciales):
-    """Guardar credenciales del bot servidor"""
+    """Guardar credenciales cifrando la password en reposo."""
     data = load_database()
-    data['bot_servidor']['credenciales'] = credenciales
+    to_store = dict(credenciales or {})
+    if to_store.get('password'):
+        to_store['password'] = crypto_util.encrypt_secret(to_store['password'])
+    data['bot_servidor']['credenciales'] = to_store
     save_database(data)
 
 def obtener_ultima_operacion_bot():
