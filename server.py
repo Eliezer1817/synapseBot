@@ -17,6 +17,19 @@ import crypto_util
 PORT = int(os.environ.get("PORT", 8000))
 CWD = os.path.dirname(os.path.abspath(__file__))
 
+# CORS: solo orígenes explícitos (override con SYNAPSE_CORS_ORIGINS, separados por coma)
+_DEFAULT_CORS = (
+    "https://synapsebot.fly.dev,"
+    "http://localhost:8000,"
+    "http://127.0.0.1:8000"
+)
+ALLOWED_ORIGINS = frozenset(
+    o.strip().rstrip("/")
+    for o in os.environ.get("SYNAPSE_CORS_ORIGINS", _DEFAULT_CORS).split(",")
+    if o.strip()
+)
+
+
 # Sistema de sesiones mejorado
 active_sessions = {}
 session_tokens = {}
@@ -511,14 +524,28 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         sys.stderr.write(f"[{self.log_date_time_string()}] {format % args}\n")
     
+    def _cors_origin(self):
+        origin = (self.headers.get('Origin') or '').strip().rstrip('/')
+        if origin in ALLOWED_ORIGINS:
+            return origin
+        return None
+
     def end_headers(self):
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+        allowed = self._cors_origin()
+        if allowed:
+            self.send_header('Access-Control-Allow-Origin', allowed)
+            self.send_header('Vary', 'Origin')
+            self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+            self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+            self.send_header('Access-Control-Max-Age', '86400')
         super().end_headers()
-    
+
     def do_OPTIONS(self):
-        self.send_response(200)
+        if (self.headers.get('Origin') or '').strip() and not self._cors_origin():
+            self.send_response(403)
+            super().end_headers()
+            return
+        self.send_response(204)
         self.end_headers()
     
     def do_GET(self):
@@ -1192,6 +1219,7 @@ def run_server(port=PORT):
         print(f"🌐 URL: http://localhost:{port}")
         print(f"📂 Directorio: {CWD}")
         print(f"🔐 Sistema de sesiones activado")
+        print(f"🌐 CORS allowlist: {sorted(ALLOWED_ORIGINS)}")
         print(f"🤖 BOT 24/7 ACTIVADO - INDEPENDIENTE DEL CLIENTE")
         print(f"💰 Balances REALES activados")
         print("="*70)
