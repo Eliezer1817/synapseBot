@@ -12,6 +12,7 @@ from conexion import _connect
 from operar import ejecutar_operacion
 from datetime import datetime
 import database  # ✅ Importación correcta
+import crypto_util
 
 PORT = int(os.environ.get("PORT", 8000))
 CWD = os.path.dirname(os.path.abspath(__file__))
@@ -30,12 +31,60 @@ bot_servidor_thread = None
 bot_servidor_estadisticas = db_data['bot_servidor']['estadisticas']
 
 class SessionManager:
-    SESSION_TIMEOUT = 24 * 3600  # 24 horas
-    
+    # Inactividad: 8h. Edad máxima absoluta: 24h desde create.
+    SESSION_TIMEOUT = 8 * 3600
+    SESSION_MAX_AGE = 24 * 3600
+
     @staticmethod
     def generate_token():
         return str(uuid.uuid4())
-    
+
+    @staticmethod
+    def _sessions_path():
+        return os.path.join(CWD, 'sessions.json')
+
+    @staticmethod
+    def _load_persisted():
+        path = SessionManager._sessions_path()
+        try:
+            if os.path.exists(path):
+                with open(path, 'r', encoding='utf-8') as f:
+                    return json.load(f) or {}
+        except Exception:
+            pass
+        return {}
+
+    @staticmethod
+    def _save_persisted(data):
+        path = SessionManager._sessions_path()
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(data, f)
+        except Exception as e:
+            print(f"⚠️ No se pudo persistir sesión: {e}")
+
+    @staticmethod
+    def _persist_token(token, email):
+        data = SessionManager._load_persisted()
+        data[token] = {'email': email, 'ts': time.time()}
+        SessionManager._save_persisted(data)
+
+    @staticmethod
+    def _unpersist_token(token):
+        data = SessionManager._load_persisted()
+        if token in data:
+            del data[token]
+            SessionManager._save_persisted(data)
+
+    @staticmethod
+    def _is_expired(session):
+        now = time.time()
+        if now - session.get('last_activity', 0) > SessionManager.SESSION_TIMEOUT:
+            return True
+        if now - session.get('created_at', 0) > SessionManager.SESSION_MAX_AGE:
+            return True
+        return False
+
     @staticmethod
     def create_session(email, iq_instance):
         token = SessionManager.generate_token()
@@ -51,69 +100,49 @@ class SessionManager:
         return token
 
     @staticmethod
-    def _persist_token(token, email):
-        path = os.path.join(CWD, 'sessions.json')
-        data = {}
-        try:
-            if os.path.exists(path):
-                with open(path, 'r', encoding='utf-8') as f:
-                    data = json.load(f) or {}
-        except Exception:
-            data = {}
-        data[token] = {'email': email, 'ts': time.time()}
-        try:
-            with open(path, 'w', encoding='utf-8') as f:
-                json.dump(data, f)
-        except Exception as e:
-            print(f"⚠️ No se pudo persistir sesión: {e}")
-
-    @staticmethod
     def _restore_session(token):
-        path = os.path.join(CWD, 'sessions.json')
-        try:
-            if not os.path.exists(path):
-                return None
-            with open(path, 'r', encoding='utf-8') as f:
-                data = json.load(f) or {}
-        except Exception:
-            return None
+        data = SessionManager._load_persisted()
         info = data.get(token)
         if not info:
             return None
+        # Expiración del token persistido
+        if time.time() - float(info.get('ts') or 0) > SessionManager.SESSION_MAX_AGE:
+            SessionManager._unpersist_token(token)
+            return None
         email = info.get('email')
         creds = database.obtener_credenciales_bot() or {}
+        # Aislamiento: solo restaurar si las credenciales cifradas son del mismo email
         if not email or creds.get('email') != email or not creds.get('password'):
+            SessionManager._unpersist_token(token)
             return None
         print(f"🔄 Restaurando sesión de {crypto_util.mask_email(email)} tras reinicio de Fly...")
         iq_session = _connect(email, creds['password'])
         active_sessions[token] = {
             'email': email,
             'iq': iq_session,
-            'created_at': time.time(),
+            'created_at': float(info.get('ts') or time.time()),
             'last_activity': time.time(),
             'gestor_riesgo': None
         }
         session_tokens[email] = token
         print("✅ Sesión restaurada")
         return active_sessions[token]
-    
+
     @staticmethod
     def get_session(token):
         if token in active_sessions:
             session = active_sessions[token]
-            # Verificar expiración
-            if time.time() - session['last_activity'] > SessionManager.SESSION_TIMEOUT:
+            if SessionManager._is_expired(session):
                 SessionManager.delete_session(token)
                 return None
-            
             session['last_activity'] = time.time()
             return session
         try:
             return SessionManager._restore_session(token)
         except Exception as e:
-            print(f"❌ No se pudo restaurar sesión: {e}")
+            print(f"❌ No se pudo restaurar sesión: {crypto_util.safe_client_error(e)}")
             return None
-    
+
     @staticmethod
     def delete_session(token):
         if token in active_sessions:
@@ -121,26 +150,33 @@ class SessionManager:
             if email in session_tokens:
                 del session_tokens[email]
             del active_sessions[token]
-    
+        SessionManager._unpersist_token(token)
+
     @staticmethod
     def delete_session_by_email(email):
         if email in session_tokens:
             token = session_tokens[email]
             SessionManager.delete_session(token)
-    
+        else:
+            # Limpiar tokens persistidos huérfanos de ese email
+            data = SessionManager._load_persisted()
+            changed = False
+            for t, info in list(data.items()):
+                if info.get('email') == email:
+                    del data[t]
+                    changed = True
+            if changed:
+                SessionManager._save_persisted(data)
+
     @staticmethod
     def cleanup_expired_sessions():
         """Limpiar sesiones expiradas"""
-        current_time = time.time()
-        expired_tokens = []
-        
-        for token, session_data in active_sessions.items():
-            if current_time - session_data['last_activity'] > SessionManager.SESSION_TIMEOUT:
-                expired_tokens.append(token)
-        
+        expired_tokens = [
+            token for token, session_data in active_sessions.items()
+            if SessionManager._is_expired(session_data)
+        ]
         for token in expired_tokens:
             SessionManager.delete_session(token)
-        
         if expired_tokens:
             print(f"🧹 Sesiones expiradas limpiadas: {len(expired_tokens)}")
 
@@ -624,7 +660,22 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
             return
 
         elif self.path == '/debug_sessions':
+            # Solo con SYNAPSE_DEBUG=1 (nunca expuesto en prod por defecto)
+            if os.environ.get('SYNAPSE_DEBUG', '').strip() != '1':
+                self.send_error(404, "Not Found")
+                return
+            session = get_authenticated_session(self)
+            if not session:
+                self.send_response(401)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'success': False,
+                    'error': 'No autorizado'
+                }).encode('utf-8'))
+                return
             db_data = database.load_database()
+            creds = db_data['bot_servidor'].get('credenciales') or {}
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
@@ -632,7 +683,10 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                 'active_sessions_count': len(active_sessions),
                 'session_tokens_count': len(session_tokens),
                 'bot_activo': db_data['bot_servidor']['activo'],
-                'bot_tiene_credenciales': db_data['bot_servidor']['credenciales'] is not None
+                'bot_tiene_credenciales': bool(creds),
+                'bot_credenciales_email_match': (
+                    bool(creds) and creds.get('email') == session.get('email')
+                ),
             }).encode('utf-8'))
             return
         
@@ -698,18 +752,32 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                     print(f"📧 Email: {masked}")
                     print(f"{'='*70}\n")
 
-                    # Verificar si ya hay sesión activa
+                    # Revocar sesión previa del mismo email
                     if email in session_tokens:
                         existing_token = session_tokens[email]
                         SessionManager.delete_session(existing_token)
                         print(f"🔄 Sesión anterior eliminada para {masked}")
+
+                    # Aislamiento: si hay bot 24/7 con OTRO email, no mezclar credenciales
+                    prev = database.obtener_credenciales_bot() or {}
+                    prev_email = (prev.get('email') or '').strip()
+                    if prev_email and prev_email.lower() != email.lower():
+                        if database.esta_activo_bot_servidor():
+                            print(f"🛑 Deteniendo bot de {crypto_util.mask_email(prev_email)} por cambio de usuario")
+                            database.detener_bot_servidor()
+                            database.actualizar_estado_vivo(
+                                'detenido',
+                                'Núcleo detenido: otro usuario inició sesión.',
+                            )
+                        database.limpiar_credenciales_bot()
+                        SessionManager.delete_session_by_email(prev_email)
 
                     # Conectar a IQ Option
                     print("⏳ Conectando a IQ Option...")
                     iq_session = _connect(email, password)
                     print("✅ Conexión establecida.")
 
-                    # Guardar credenciales CIFRADAS para el bot 24/7
+                    # Guardar credenciales CIFRADAS solo del usuario actual
                     database.guardar_credenciales_bot({'email': email, 'password': password})
                     print("🔐 Credenciales cifradas guardadas para el bot 24/7.")
                     
@@ -771,9 +839,15 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                 try:
                     session = get_authenticated_session(self)
                     if session:
-                        SessionManager.delete_session_by_email(session['email'])
-                        print(f"✅ Sesión cerrada para {session['email']}")
-                    
+                        email = session['email']
+                        SessionManager.delete_session_by_email(email)
+                        # Si el bot no está activo y las credenciales son de este user, limpiar
+                        if not database.esta_activo_bot_servidor():
+                            creds = database.obtener_credenciales_bot() or {}
+                            if (creds.get('email') or '').lower() == email.lower():
+                                database.limpiar_credenciales_bot()
+                        print(f"✅ Sesión cerrada para {crypto_util.mask_email(email)}")
+
                     self.send_response(200)
                     self.send_header('Content-type', 'application/json')
                     self.end_headers()
@@ -781,49 +855,49 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                         'success': True,
                         'message': 'Sesión cerrada correctamente'
                     }).encode('utf-8'))
-                    
+
                 except Exception as e:
-                    error_msg = str(e)
-                    print(f"❌ ERROR en logout: {error_msg}")
-                    
+                    print(f"❌ ERROR en logout: {crypto_util.safe_client_error(e)}")
                     self.send_response(500)
                     self.send_header('Content-type', 'application/json')
                     self.end_headers()
                     self.wfile.write(json.dumps({
                         'success': False,
-                        'error': error_msg
+                        'error': 'No se pudo cerrar la sesión'
                     }).encode('utf-8'))
-            
+
             elif self.path == '/force_logout':
+                # Solo el usuario autenticado puede revocar SU propia sesión
                 try:
-                    content_length = int(self.headers.get('Content-Length', 0))
-                    if content_length > 0:
-                        post_data = self.rfile.read(content_length)
-                        data = json.loads(post_data.decode('utf-8'))
-                        email = data.get('email', '').strip()
-                        
-                        if email:
-                            SessionManager.delete_session_by_email(email)
-                            print(f"🔄 Sesión forzada cerrada para {email}")
-                    
-                    self.send_response(200)
-                    self.send_header('Content-type', 'application/json')
-                    self.end_headers()
-                    self.wfile.write(json.dumps({
-                        'success': True,
-                        'message': 'Sesiones cerradas en todos los dispositivos'
-                    }).encode('utf-8'))
-                    
+                    session = get_authenticated_session(self)
+                    if not session:
+                        self.send_response(401)
+                        self.send_header('Content-type', 'application/json')
+                        self.end_headers()
+                        self.wfile.write(json.dumps({
+                            'success': False,
+                            'error': 'No autorizado'
+                        }).encode('utf-8'))
+                    else:
+                        email = session['email']
+                        SessionManager.delete_session_by_email(email)
+                        print(f"🔄 Sesión forzada cerrada para {crypto_util.mask_email(email)}")
+                        self.send_response(200)
+                        self.send_header('Content-type', 'application/json')
+                        self.end_headers()
+                        self.wfile.write(json.dumps({
+                            'success': True,
+                            'message': 'Sesión revocada'
+                        }).encode('utf-8'))
+
                 except Exception as e:
-                    error_msg = str(e)
-                    print(f"❌ ERROR en force_logout: {error_msg}")
-                    
+                    print(f"❌ ERROR en force_logout: {crypto_util.safe_client_error(e)}")
                     self.send_response(500)
                     self.send_header('Content-type', 'application/json')
                     self.end_headers()
                     self.wfile.write(json.dumps({
                         'success': False,
-                        'error': error_msg
+                        'error': 'No se pudo revocar la sesión'
                     }).encode('utf-8'))
             
             elif self.path == '/operar':
@@ -927,10 +1001,20 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                     post_data = self.rfile.read(content_length) if content_length > 0 else b'{}'
                     config = json.loads(post_data.decode('utf-8'))
                     
-                    # Las credenciales ya se guardan en el login
+                    # Credenciales del login; deben ser del mismo usuario autenticado
                     credenciales = database.obtener_credenciales_bot()
                     if not credenciales or not credenciales.get('password'):
                         raise Exception("No se encontraron credenciales guardadas. Por favor, inicie sesión de nuevo.")
+                    if (credenciales.get('email') or '').lower() != (session.get('email') or '').lower():
+                        raise Exception(
+                            "Las credenciales guardadas no coinciden con tu sesión. "
+                            "Cerrá sesión e iniciá de nuevo."
+                        )
+                    # Reafirmar ownership: re-guardar solo si match (ya cifradas vía guardar)
+                    database.guardar_credenciales_bot({
+                        'email': session['email'],
+                        'password': credenciales['password'],
+                    })
 
                     database.guardar_config_bot(config)
                     
@@ -955,7 +1039,7 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                     bot_servidor_thread.daemon = True
                     bot_servidor_thread.start()
                     
-                    print(f"🚀 BOT 24/7 INICIADO para {session['email']}")
+                    print(f"🚀 BOT 24/7 INICIADO para {crypto_util.mask_email(session['email'])}")
                     print(f"📋 Configuración: {config}")
                     print(f"🔐 Credenciales guardadas para reconexión automática")
                     
@@ -991,9 +1075,10 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                     
                     database.actualizar_estado_vivo('detenido', 'El núcleo fue detenido desde el dashboard.')
                     database.detener_bot_servidor()
-                    database.limpiar_credenciales_bot()  # Limpiar credenciales
-                    
-                    print(f"🛑 BOT 24/7 DETENIDO por {session['email']}")
+                    creds = database.obtener_credenciales_bot() or {}
+                    if (creds.get('email') or '').lower() == (session.get('email') or '').lower():
+                        database.limpiar_credenciales_bot()
+                    print(f"🛑 BOT 24/7 DETENIDO por {crypto_util.mask_email(session['email'])}")
                     
                     self.send_response(200)
                     self.send_header('Content-type', 'application/json')
