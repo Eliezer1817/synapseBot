@@ -1,134 +1,117 @@
-# ⚡ SynapseBot
+# SynapseBot
 
-**Bot de trading algorítmico autónomo** para IQ Option, impulsado por **LightGBM** + indicadores técnicos + gestión de riesgo inteligente.
+Bot de trading algorítmico para **IQ Option** (binarias). Estrategia por **reglas** (no ML en producción): **EMA 9/21 + MACD + Bollinger**, con confirmación de vela, modo manual o **Núcleo 24/7**, dashboard y despliegue en Fly.io.
 
-> Precisión. Velocidad. Control total.
+> Proyecto en prueba · Uso educativo / investigación · Alto riesgo de pérdida
 
----
-
-## 🧠 ¿Qué es SynapseBot?
-
-SynapseBot es un sistema de trading automatizado que:
-
-- Analiza el mercado en tiempo real (EURUSD-OTC)
-- Usa un modelo **LightGBM** entrenado con features técnicos
-- Decide **CALL / PUT / SKIP** según umbrales de probabilidad
-- Gestiona el riesgo de forma inteligente (rachas, stop-loss diario, tamaño de posición)
-- Expone una API + dashboard futurista
+**Demo en vivo:** https://synapsebot.fly.dev/
 
 ---
 
-## ✨ Características principales
+## Qué hace (hoy)
 
-| Función | Descripción |
-|---------|-------------|
-| **Modelo LightGBM** | Predicción de dirección con features de alta calidad |
-| **Indicadores técnicos** | RSI, EMA 20/50, MACD, Bollinger Bands, ATR, retornos, Harami |
-| **Gestión de riesgo** | % del balance, ajuste por racha, stop-loss diario, límites por tamaño de cuenta |
-| **Modo Demo / Real** | Cambia fácilmente entre PRACTICE y REAL |
-| **Ejecución automática** | Puede operar solo o esperar confirmación |
-| **API Flask** | Endpoints listos para el frontend |
-| **Dashboard** | Landing futurista con video 3D y terminal de acceso |
-
----
-
-## 🛠️ Stack tecnológico
-
-- **Python 3**
-- LightGBM
-- `ta` (Technical Analysis)
-- pandas + numpy
-- Flask
-- [iqoptionapi](https://github.com/Lu-Yi-Hsun/iqoptionapi)
-- Docker / Fly.io / Railway
+- Analiza **EURUSD-OTC** en velas de 5 minutos
+- Decide **CALL / PUT / SKIP** según score de componentes (EMA, MACD, BB, vela)
+- Opera en **DEMO** o **REAL** (recomendado: DEMO hasta validar edge)
+- Dashboard: Resumen, Operar, Núcleo 24/7, Riesgo, Cuentas, Historial
+- **Investigación:** registra señales (incl. SKIP) y resultado hipotético a 5 min para medir edge por score **sin** cambiar las reglas
+- **Idempotencia at-most-once** en 24/7 (no duplicar trades ante restart/crash)
+- Credenciales IQ cifradas en reposo (Fernet + secret de Fly)
+- Persistencia en volumen Fly (`/data`)
+- Paywall opcional: licencia por **USDT TRC20** con verificación on-chain automática
 
 ---
 
-## 📁 Estructura del proyecto
+## Qué *no* es
+
+- **No** usa LightGBM en el flujo real de trading (el README viejo lo decía; era una idea). Puede haber un `lgbm_model.txt` legado en el repo: **no** gobierna las operaciones actuales.
+- **No** hay API oficial de IQ Option: se usa un wrapper no oficial (`iqoptionapi`). Riesgo principal: ToS / ban / inestabilidad, además del riesgo de mercado.
+- **No** es consejo financiero ni promesa de rentabilidad.
+
+---
+
+## Stack
+
+| Pieza | Uso |
+|--------|-----|
+| Python 3 | Motor (`operar.py`), API (`server.py`), persistencia (`database.py`) |
+| `ta` / pandas / numpy | Indicadores y datos |
+| Flask (HTTP server embebido) | API + servir `index.html` |
+| cryptography | Cifrado de credenciales |
+| iqoptionapi | Conexión no oficial a IQ Option |
+| Docker + Fly.io | Deploy + volumen persistente |
+
+---
+
+## Estructura (relevante)
 
 ```text
 synapseBot/
-├── operar.py          # Motor de trading + modelo + riesgo
-├── conexion.py        # Conexión a IQ Option
-├── database.py        # Persistencia
-├── server.py          # API Flask
-├── index.html         # Dashboard / Landing
-├── lgbm_model.txt     # Modelo entrenado
-├── requirements.txt
+├── operar.py          # Señales EMA/MACD/BB, ejecución, investigación hip.
+├── conexion.py        # Sesión IQ Option
+├── database.py        # trading_data.json, idempotencia, licencias, research
+├── server.py          # HTTP API, sesión, Núcleo 24/7, paywall
+├── payment_tron.py    # Verificación USDT TRC20 (TronGrid)
+├── crypto_util.py     # Fernet + sanitizado de errores
+├── stats_util.py      # Stats de operaciones cerradas
+├── index.html         # Landing + dashboard
 ├── Dockerfile
-├── fly.toml
-└── railway.json
+├── fly.toml           # App + mount /data
+└── requirements.txt
+```
 
-🚀 Instalación rápida
-🤖BASH
-# 1. Clonar
-git clone https://github.com/Eliezer1817/synapseBot.git
-cd synapseBot
+---
 
-# 2. Entorno virtual
-python -m venv venv
-source venv/bin/activate   # Windows: venv\Scripts\activate
+## Variables de entorno (Fly secrets)
 
-# 3. Dependencias
-pip install -r requirements.txt
+| Variable | Rol |
+|----------|-----|
+| `SYNAPSE_CREDENTIALS_KEY` | Clave Fernet para passwords IQ |
+| `SYNAPSE_DATA_DIR` | Persistencia (en Fly: `/data`) |
+| `SYNAPSE_USDT_ADDRESS` | Address TRC20 para paywall (opcional) |
+| `SYNAPSE_LICENSE_ALLOWLIST` | Emails sin paywall (coma-separados) |
+| `SYNAPSE_PAYMENT_USDT` | Monto base (default `100`) |
+| `SYNAPSE_LICENSE_DAYS` | `0` = licencia sin vencimiento |
+| `TRONGRID_API_KEY` | Opcional, rate limit TronGrid |
+| `SYNAPSE_DEBUG` | `1` habilita endpoints de debug |
 
-# 4. Variables de entorno (recomendado)
-export IQ_EMAIL="tu@email.com"
-export IQ_PASSWORD="tu_password"
+Nunca subas passwords, keys ni addresses de pago al repo. Usá secrets de Fly.
 
---------------------------------------------------------------------
+---
 
-▶️ Uso básico
-🐍PYTHON
-from operar import ejecutar_operacion
-from conexion import conectar   # ajusta según tu archivo
+## Deploy (Fly)
 
-iq = conectar()
+```bash
+fly deploy -a synapsebot
+fly secrets set SYNAPSE_CREDENTIALS_KEY="..."
+# paywall (opcional)
+fly secrets set SYNAPSE_USDT_ADDRESS="T..." SYNAPSE_LICENSE_ALLOWLIST="tu@email.com"
+```
 
-resultado = ejecutar_operacion(
-    iq=iq,
-    modo="demo",              # "demo" o "real"
-    monto=None,               # None = cálculo automático
-    ejecutar_auto=True,       # True = opera solo
-    forzar_operacion=False
-)
+Requiere volumen montado en `/data` (ver `fly.toml`).
 
-print(resultado)
+---
 
---------------------------------------------------------------------
+## Seguridad del repo / cuenta
 
-⚙️ Configuración de riesgo
-El bot incluye un GestorRiesgoInteligente con:
-•  Riesgo base por operación (por defecto 2%)
-•  Ajuste automático según calidad de señal
-•  Reducción tras rachas de pérdidas
-•  Stop-loss diario
-•  Límites según tamaño de cuenta
+Checklist recomendado para este proyecto:
 
---------------------------------------------------------------------
+1. **2FA** en GitHub (obligatorio en la práctica).
+2. Repo **sin** `.env`, passwords ni keys en el historial.
+3. Añadir **`.gitignore`** (venv, `__pycache__`, `.env`, datos locales).
+4. Preferir **secrets en Fly**, no en GitHub Actions ni en el código.
+5. Revisar tokens PAT: mínimo scope, vencimiento corto; rotar si se filtró alguno.
+6. Si el bot es comercial / con paywall: valorar repo **privado** (el código público facilita forks y abuso).
+7. No compartir ACCESS_KEY de IQ ni seeds/wallets en issues, commits ni chats públicos.
 
-📊 Features del modelo
-rsi_14 · ema_20 · ema_50 · macd · macd_signal · macd_hist
-bb_high · bb_low · bb_width · atr_14
-ret_1 · ret_3 · ret_6 · vol_10 · harami
+---
 
---------------------------------------------------------------------
+## Aviso de riesgo
 
-⚠️ Aviso importante
-Este software es solo para fines educativos y de investigación.
-El trading de opciones binarias implica un alto riesgo de pérdida.
-Usa siempre la cuenta DEMO primero.
-El autor no se hace responsable de pérdidas financieras.
+Trading de opciones binarias puede llevar a **pérdida total** del capital. SynapseBot es un proyecto experimental. Validá cualquier edge en DEMO con la tabla de investigación por score antes de considerar dinero real. IQ Option puede restringir o banear automatización no oficial.
 
---------------------------------------------------------------------
+---
 
-## Demo en video
+## Licencia / autor
 
-Mira la demo de SynapseBot aquí:  
-[Ver video en Google Drive](https://drive.google.com/file/d/1WY7wDEHy-1ZkKCqh2QhoCtn9iILM3vRI/view?usp=drivesdk)
-
-
-📄 Licencia
-Proyecto privado / uso personal.
-Contacto: Eliezer1817
-
+Uso bajo tu propia responsabilidad. Repo: [Eliezer1817/synapseBot](https://github.com/Eliezer1817/synapseBot).
