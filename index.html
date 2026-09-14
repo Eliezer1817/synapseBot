@@ -972,6 +972,18 @@ input[type="range"]::-webkit-slider-thumb {
 .res-table th,.res-table td{padding:.4rem .45rem;border-bottom:1px solid rgba(255,255,255,.08);text-align:left}
 .res-table th{opacity:.65;font-weight:600;letter-spacing:.04em}
 .res-comp{opacity:.75;font-size:.65rem}
+
+.paywall{display:none;margin-top:1.2rem;padding:1rem;border:1px solid rgba(255,180,60,.45);border-radius:12px;background:rgba(255,140,0,.08)}
+.paywall.show{display:block}
+.paywall h3{margin:0 0 .5rem;color:#ffb84d;font-size:.95rem}
+.paywall .pay-amount{font-size:1.4rem;font-weight:800;color:#ffe0a0;margin:.4rem 0}
+.paywall .pay-addr{font-family:ui-monospace,monospace;font-size:.7rem;word-break:break-all;padding:.5rem;background:rgba(0,0,0,.35);border-radius:8px}
+.paywall .pay-actions{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.75rem}
+.paywall button{font-size:.75rem;padding:.45rem .7rem;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:inherit;cursor:pointer}
+.paywall button.primary{background:rgba(255,140,0,.25);border-color:rgba(255,180,60,.6)}
+.paywall img.pay-qr{width:180px;height:180px;margin:.6rem auto;display:block;background:#fff;padding:8px;border-radius:8px}
+.paywall .pay-status{margin-top:.6rem;font-size:.78rem}
+.paywall .ok{color:#5dffb0}
 </style>
 </head>
 <body>
@@ -1035,6 +1047,28 @@ input[type="range"]::-webkit-slider-thumb {
             </div>
           </div>
           <button type="submit" class="btn-core" id="connectBtn">CONECTAR AL NÚCLEO</button>
+          <div class="paywall" id="paywallBox">
+            <h3>🔒 Acceso de pago · 100 USDT (TRC20)</h3>
+            <p style="font-size:.75rem;opacity:.9;margin:0 0 .5rem">Acceso al núcleo: <b>100 USDT TRC20</b>. La licencia queda vinculada a tu cuenta de IQ Option y se activa sola al confirmarse el pago en blockchain.</p>
+            <label class="control-label" style="font-size:.7rem">Email de IQ Option (la licencia se vincula a esta cuenta)</label>
+            <input type="email" id="payEmail" class="control-input" placeholder="el mismo email con el que te conectás" style="width:100%;margin:.3rem 0 .6rem">
+            <div class="pay-actions">
+              <button type="button" class="primary" id="payStartBtn" onclick="iniciarPagoAcceso()">Generar pago</button>
+              <button type="button" id="payCheckBtn" onclick="verificarPagoAcceso()" style="display:none">Ya pagué · verificar</button>
+            </div>
+            <div id="payDetails" style="display:none;margin-top:.8rem">
+              <div>Enviá exactamente:</div>
+              <div class="pay-amount" id="payAmount">—</div>
+              <div style="font-size:.7rem;opacity:.8">USDT · red <b>TRX Tron (TRC20)</b> · el monto con centavos identifica tu pago</div>
+              <img class="pay-qr" id="payQr" alt="QR address">
+              <div class="pay-addr" id="payAddress">—</div>
+              <div class="pay-actions">
+                <button type="button" onclick="copiarPagoCampo('payAddress')">Copiar address</button>
+                <button type="button" onclick="copiarPagoCampo('payAmount')">Copiar monto</button>
+              </div>
+              <div class="pay-status" id="payStatus">Esperando pago en blockchain…</div>
+            </div>
+          </div>
           <div id="loadingText" class="hidden" style="text-align: center; margin-top: 15px; color: var(--neon); font-size: 0.7rem; letter-spacing: 0.1em;">CONECTANDO AL NÚCLEO...</div>
         </form>
         <div class="panel-footer">
@@ -2057,6 +2091,11 @@ async function login() {
     });
     const json = await res.json();
     if (!res.ok || !json.success) {
+      if (json.license_required) {
+        mostrarPaywall(true, email);
+        const pe = document.getElementById('payEmail');
+        if (pe) pe.value = email;
+      }
       throw new Error(json.error || 'Error al iniciar sesión');
     }
 
@@ -2843,6 +2882,82 @@ window.addEventListener('beforeunload', (e) => {
     e.returnValue = '¿Estás seguro? El bot automático se detendrá.';
   }
 });
+
+let _pagoActual = null;
+let _pagoTimer = null;
+
+function mostrarPaywall(show, email) {
+  var box = document.getElementById('paywallBox');
+  if (!box) return;
+  box.classList.toggle('show', !!show);
+  if (email) {
+    var pe = document.getElementById('payEmail');
+    if (pe && !pe.value) pe.value = email;
+  }
+}
+
+async function iniciarPagoAcceso() {
+  var email = (document.getElementById('payEmail').value || document.getElementById('emailInput').value || '').trim();
+  if (!email) { alert('Ingresá el email'); return; }
+  try {
+    const res = await fetch('/crear_pago', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ email: email })
+    });
+    const data = await res.json();
+    if (!data.success) { alert(data.error || 'No se pudo crear el pago'); return; }
+    _pagoActual = data.pago;
+    document.getElementById('payDetails').style.display = 'block';
+    document.getElementById('payCheckBtn').style.display = '';
+    document.getElementById('payAmount').textContent = data.pago.amount_usdt + ' USDT';
+    document.getElementById('payAddress').textContent = data.pago.address;
+    var qr = document.getElementById('payQr');
+    qr.src = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(data.pago.address);
+    document.getElementById('payStatus').textContent = data.instrucciones || 'Enviá el monto exacto y esperá confirmación automática.';
+    if (_pagoTimer) clearInterval(_pagoTimer);
+    _pagoTimer = setInterval(verificarPagoAcceso, 20000);
+    verificarPagoAcceso();
+  } catch (e) { alert('Error: ' + e); }
+}
+
+async function verificarPagoAcceso() {
+  if (!_pagoActual || !_pagoActual.id) return;
+  try {
+    const res = await fetch('/verificar_pago', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ id: _pagoActual.id, email: _pagoActual.email })
+    });
+    const data = await res.json();
+    var st = document.getElementById('payStatus');
+    if (!data.success) {
+      if (st) st.textContent = data.error || 'Error verificando';
+      return;
+    }
+    if (data.license_active || (data.pago && data.pago.status === 'paid')) {
+      if (st) { st.textContent = '✅ Pago confirmado. Ya podés conectar al núcleo con ese email.'; st.className = 'pay-status ok'; }
+      if (_pagoTimer) { clearInterval(_pagoTimer); _pagoTimer = null; }
+      alert('Pago detectado. Licencia activa. Conectá al núcleo.');
+    } else {
+      if (st) st.textContent = 'Aún no vemos el pago. Asegurate de enviar el monto exacto por TRC20. Reintentando…';
+    }
+  } catch (e) {}
+}
+
+function copiarPagoCampo(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  var t = el.textContent.replace(' USDT','').trim();
+  if (navigator.clipboard) navigator.clipboard.writeText(t);
+  else alert(t);
+}
+
+// Mostrar paywall al cargar si pagos están
+fetch('/pago_info').then(r => r.json()).then(d => {
+  if (d && d.enabled) mostrarPaywall(true);
+}).catch(() => {});
+
 </script>
 </body>
 </html>

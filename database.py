@@ -55,7 +55,9 @@ def init_database():
                 },
                 # keys: v1:{activo}:{candle_open}:{CALL|PUT|CYCLE}
                 'idempotencia': {},
-                'investigacion': []
+                'investigacion': [],
+                'licencias': {},
+                'pagos_pendientes': {}
             }
         }
         save_database(data)
@@ -590,3 +592,157 @@ def stats_investigacion_por_score():
             'resueltas': decided,
         })
     return table
+
+
+def _ensure_licencias(data):
+    bot = data.setdefault('bot_servidor', {})
+    if 'licencias' not in bot or not isinstance(bot['licencias'], dict):
+        bot['licencias'] = {}
+    if 'pagos_pendientes' not in bot or not isinstance(bot['pagos_pendientes'], dict):
+        bot['pagos_pendientes'] = {}
+    if 'pagos_txid_usados' not in bot or not isinstance(bot['pagos_txid_usados'], dict):
+        bot['pagos_txid_usados'] = {}
+    return bot
+
+
+def tiene_licencia_activa(email: str) -> bool:
+    import payment_tron
+    email_l = (email or '').strip().lower()
+    if not email_l:
+        return False
+    if email_l in payment_tron.license_allowlist():
+        return True
+    # si el paywall no está configurado, no bloquear (dev local)
+    if not payment_tron.payment_configured():
+        return True
+    data = load_database()
+    lic = _ensure_licencias(data)['licencias'].get(email_l)
+    if not lic:
+        return False
+    if lic.get('revoked'):
+        return False
+    exp = lic.get('expires_at')
+    if exp is not None and float(exp) > 0 and time.time() > float(exp):
+        return False
+    return True
+
+
+def obtener_licencia(email: str):
+    email_l = (email or '').strip().lower()
+    data = load_database()
+    return _ensure_licencias(data)['licencias'].get(email_l)
+
+
+def otorgar_licencia(email: str, meta: dict = None):
+    import payment_tron
+    email_l = (email or '').strip().lower()
+    days = 0
+    try:
+        days = int(os.environ.get('SYNAPSE_LICENSE_DAYS') or '0')
+    except Exception:
+        days = 0
+    with _DB_LOCK:
+        data = load_database()
+        bot = _ensure_licencias(data)
+        expires = None if days <= 0 else time.time() + days * 86400
+        entry = {
+            'email': email_l,
+            'active': True,
+            'paid_at': time.time(),
+            'expires_at': expires,
+            'plan': 'usdt_trc20',
+        }
+        if meta:
+            entry.update(meta)
+        bot['licencias'][email_l] = entry
+        save_database(data)
+        return entry
+
+
+def crear_pago_pendiente(email: str) -> dict:
+    """Crea intent con monto único 100.XX para matching automático."""
+    import payment_tron
+    import random
+    email_l = (email or '').strip().lower()
+    if not email_l or '@' not in email_l:
+        raise ValueError('Email inválido')
+    if not payment_tron.payment_configured():
+        raise RuntimeError('Pagos no configurados (falta SYNAPSE_USDT_ADDRESS)')
+    base = payment_tron.base_amount_usdt()
+    with _DB_LOCK:
+        data = load_database()
+        bot = _ensure_licencias(data)
+        pending = bot['pagos_pendientes']
+        # reutilizar intent pending reciente del mismo email (<2h)
+        for pid, p in list(pending.items()):
+            if p.get('email') == email_l and p.get('status') == 'pending':
+                if time.time() - float(p.get('created_at') or 0) < 7200:
+                    return p
+        used_cents = set()
+        for p in pending.values():
+            if p.get('status') == 'pending':
+                try:
+                    used_cents.add(int(round((float(p['amount_usdt']) - int(base)) * 100)))
+                except Exception:
+                    pass
+        cents = random.randint(1, 99)
+        for _ in range(50):
+            if cents not in used_cents:
+                break
+            cents = random.randint(1, 99)
+        amount = round(int(base) + cents / 100.0, 2)
+        pid = f"pay-{int(time.time())}-{cents:02d}"
+        entry = {
+            'id': pid,
+            'email': email_l,
+            'amount_usdt': amount,
+            'currency': 'USDT',
+            'network': 'TRC20',
+            'address': payment_tron.payment_address(),
+            'status': 'pending',
+            'created_at': time.time(),
+            'expires_at': time.time() + 6 * 3600,
+        }
+        pending[pid] = entry
+        # podar viejos
+        for old_id, old in list(pending.items()):
+            if old.get('status') == 'pending' and float(old.get('expires_at') or 0) < time.time():
+                old['status'] = 'expired'
+        save_database(data)
+        return entry
+
+
+def listar_pagos_pendientes() -> list:
+    data = load_database()
+    bot = _ensure_licencias(data)
+    now = time.time()
+    out = []
+    for p in bot['pagos_pendientes'].values():
+        if p.get('status') == 'pending' and float(p.get('expires_at') or 0) >= now:
+            out.append(p)
+    return out
+
+
+def marcar_pago_confirmado(pago_id: str, match: dict) -> dict:
+    with _DB_LOCK:
+        data = load_database()
+        bot = _ensure_licencias(data)
+        p = bot['pagos_pendientes'].get(pago_id)
+        if not p:
+            raise KeyError('pago no encontrado')
+        txid = (match or {}).get('txid')
+        if txid and txid in bot['pagos_txid_usados']:
+            raise ValueError('Este TXID ya fue usado para otra licencia')
+        p['status'] = 'paid'
+        p['paid_at'] = time.time()
+        p['txid'] = txid
+        p['match'] = {k: match.get(k) for k in ('txid', 'amount', 'from', 'to', 'block_timestamp') if match}
+        if txid:
+            bot['pagos_txid_usados'][txid] = {'pago_id': pago_id, 'email': p.get('email'), 'ts': time.time()}
+        save_database(data)
+        return p
+
+
+def obtener_pago(pago_id: str):
+    data = load_database()
+    return _ensure_licencias(data)['pagos_pendientes'].get(pago_id)

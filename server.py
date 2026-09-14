@@ -13,6 +13,7 @@ from operar import ejecutar_operacion
 from datetime import datetime
 import database  # ✅ Importación correcta
 import crypto_util
+import payment_tron
 
 PORT = int(os.environ.get("PORT", 8000))
 CWD = os.path.dirname(os.path.abspath(__file__))
@@ -726,6 +727,63 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
             }).encode('utf-8'))
             return
 
+
+        elif self.path.split('?')[0] == '/pago_info':
+            try:
+                cfg = payment_tron.payment_configured()
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'success': True,
+                    'enabled': cfg,
+                    'network': 'TRC20',
+                    'currency': 'USDT',
+                    'base_amount': payment_tron.base_amount_usdt() if cfg else None,
+                    'address': payment_tron.payment_address() if cfg else None,
+                    'contract': payment_tron.USDT_TRC20 if cfg else None,
+                }).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode('utf-8'))
+            return
+
+        elif self.path.split('?')[0] == '/pago_estado':
+            try:
+                qs = parse_qs(urlparse(self.path).query)
+                pago_id = (qs.get('id') or [''])[0].strip()
+                email = (qs.get('email') or [''])[0].strip().lower()
+                # auto-check pending on poll
+                try:
+                    verificar_pagos_pendientes()
+                except Exception:
+                    pass
+                pago = database.obtener_pago(pago_id) if pago_id else None
+                lic_ok = database.tiene_licencia_activa(email) if email else False
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                # no exponer match.raw enorme
+                safe_pago = None
+                if pago:
+                    safe_pago = {k: pago.get(k) for k in (
+                        'id', 'email', 'amount_usdt', 'currency', 'network', 'address',
+                        'status', 'created_at', 'expires_at', 'paid_at', 'txid'
+                    )}
+                self.wfile.write(json.dumps({
+                    'success': True,
+                    'pago': safe_pago,
+                    'license_active': lic_ok,
+                }).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': crypto_util.safe_client_error(e)}).encode('utf-8'))
+            return
+
         elif self.path.split('?')[0] == '/investigacion_stats':
             session = get_authenticated_session(self)
             if not session:
@@ -936,6 +994,11 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                     
                     if not email or not password:
                         raise Exception("Email y password son requeridos")
+                    if payment_tron.payment_configured() and not database.tiene_licencia_activa(email):
+                        raise Exception(
+                            "LICENSE_REQUIRED: Acceso de pago requerido (100 USDT TRC20). "
+                            "Andá a Pagar acceso, enviá el monto exacto y esperá la confirmación automática."
+                        )
                     if not crypto_util.credentials_key_configured():
                         raise Exception(
                             "Falta SYNAPSE_CREDENTIALS_KEY en el servidor. "
@@ -1021,17 +1084,86 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                 except Exception as e:
                     print(f"❌ ERROR en login: {crypto_util.safe_client_error(e)}")
                     traceback.print_exc()
+                    raw = str(e)
+                    license_required = raw.startswith('LICENSE_REQUIRED')
                     client_msg = crypto_util.safe_client_error(
                         e, fallback="No se pudo iniciar sesión. Revisá credenciales o intentá de nuevo."
                     )
-                    self.send_response(500)
+                    if license_required:
+                        client_msg = raw.split('LICENSE_REQUIRED:', 1)[-1].strip()
+                    self.send_response(402 if license_required else 500)
                     self.send_header('Content-type', 'application/json')
                     self.end_headers()
                     self.wfile.write(json.dumps({
-                        'success': False, 
-                        'error': client_msg
+                        'success': False,
+                        'error': client_msg,
+                        'license_required': license_required,
                     }).encode('utf-8'))
             
+
+            elif self.path == '/crear_pago':
+                try:
+                    content_length = int(self.headers.get('Content-Length', 0))
+                    body = json.loads(self.rfile.read(content_length).decode('utf-8') if content_length else '{}')
+                    email = (body.get('email') or '').strip().lower()
+                    pago = database.crear_pago_pendiente(email)
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'success': True,
+                        'pago': {
+                            'id': pago['id'],
+                            'email': pago['email'],
+                            'amount_usdt': pago['amount_usdt'],
+                            'currency': pago['currency'],
+                            'network': pago['network'],
+                            'address': pago['address'],
+                            'expires_at': pago['expires_at'],
+                            'status': pago['status'],
+                        },
+                        'instrucciones': (
+                            f"Enviá exactamente {pago['amount_usdt']} USDT en red TRC20 (Tron) a la address indicada. "
+                            "El monto con centavos identifica tu pago. La activación es automática al confirmarse en blockchain."
+                        ),
+                    }).encode('utf-8'))
+                except Exception as e:
+                    self.send_response(400)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'success': False,
+                        'error': crypto_util.safe_client_error(e, 'No se pudo crear el pago'),
+                    }).encode('utf-8'))
+
+            elif self.path == '/verificar_pago':
+                try:
+                    content_length = int(self.headers.get('Content-Length', 0))
+                    body = json.loads(self.rfile.read(content_length).decode('utf-8') if content_length else '{}')
+                    pago_id = (body.get('id') or '').strip()
+                    results = verificar_pagos_pendientes(only_id=pago_id or None)
+                    pago = database.obtener_pago(pago_id) if pago_id else None
+                    email = (pago or {}).get('email') or (body.get('email') or '').strip().lower()
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'success': True,
+                        'checked': results,
+                        'pago': pago and {k: pago.get(k) for k in (
+                            'id', 'email', 'amount_usdt', 'status', 'txid', 'paid_at', 'address', 'network'
+                        )},
+                        'license_active': database.tiene_licencia_activa(email) if email else False,
+                    }).encode('utf-8'))
+                except Exception as e:
+                    self.send_response(400)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'success': False,
+                        'error': crypto_util.safe_client_error(e, 'No se pudo verificar el pago'),
+                    }).encode('utf-8'))
+
             elif self.path == '/logout':
                 try:
                     session = get_authenticated_session(self)
@@ -1509,6 +1641,44 @@ def cleanup_sessions_periodically():
         time.sleep(3600)  # 1 hora
         SessionManager.cleanup_expired_sessions()
 
+
+def verificar_pagos_pendientes(only_id=None):
+    """Revisa TronGrid y otorga licencia automáticamente si matchea el monto."""
+    if not payment_tron.payment_configured():
+        return []
+    confirmed = []
+    pendientes = database.listar_pagos_pendientes()
+    if only_id:
+        pendientes = [p for p in pendientes if p.get('id') == only_id]
+    for p in pendientes:
+        try:
+            created_ms = int(float(p.get('created_at') or 0) * 1000)
+            match = payment_tron.find_matching_payment(p['amount_usdt'], created_ms)
+            if not match or not match.get('txid'):
+                continue
+            paid = database.marcar_pago_confirmado(p['id'], match)
+            lic = database.otorgar_licencia(paid['email'], {
+                'txid': match.get('txid'),
+                'amount_usdt': paid.get('amount_usdt'),
+                'pago_id': paid.get('id'),
+            })
+            confirmed.append({'pago_id': p['id'], 'email': paid['email'], 'txid': match.get('txid')})
+            print(f"✅ Pago automático confirmado {p['id']} → licencia {paid['email']} tx={match.get('txid')}")
+        except Exception as e:
+            print(f"⚠️ verificar pago {p.get('id')}: {e}")
+    return confirmed
+
+
+def payment_poller_loop():
+    while True:
+        try:
+            time.sleep(45)
+            if payment_tron.payment_configured():
+                verificar_pagos_pendientes()
+        except Exception as e:
+            print(f"⚠️ payment poller: {e}")
+            time.sleep(30)
+
 def run_server(port=PORT):
     # SYNAPSE_CREDENTIALS_KEY check
     if not crypto_util.credentials_key_configured():
@@ -1533,6 +1703,13 @@ def run_server(port=PORT):
     cleanup_thread = threading.Thread(target=cleanup_sessions_periodically)
     cleanup_thread.daemon = True
     cleanup_thread.start()
+    if payment_tron.payment_configured():
+        pay_thread = threading.Thread(target=payment_poller_loop)
+        pay_thread.daemon = True
+        pay_thread.start()
+        print("💳 Payment poller USDT TRC20 activo")
+    else:
+        print("💳 Paywall desactivado (falta SYNAPSE_USDT_ADDRESS)")
     
     server_address = ('', port)
     
