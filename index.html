@@ -2102,11 +2102,16 @@ async function login() {
   connectBtn.textContent = 'CONECTANDO...';
   if(loadingText) loadingText.classList.remove('hidden');
 
+  const controller = new AbortController();
+  // Un poco sobre el timeout server (~12s) para dejar responder el JSON tipado.
+  const abortTimer = setTimeout(() => controller.abort(), 13000);
+
   try {
     const res = await fetch('/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
+      body: JSON.stringify({ email, password }),
+      signal: controller.signal
     });
     const json = await res.json();
     if (!res.ok || !json.success) {
@@ -2137,7 +2142,12 @@ async function login() {
     iniciarMonitorServidor(true); cargarEstadisticasReales();
 
   } catch (err) {
-    alert('❌ Error: ' + err.message);
+    const msg = (err && err.name === 'AbortError')
+      ? 'No se pudo conectar a IQ Option (revisá demo/real y access key)'
+      : (err && err.message) || 'Error al iniciar sesión';
+    alert('❌ Error: ' + msg);
+  } finally {
+    clearTimeout(abortTimer);
     connectBtn.disabled = false;
     connectBtn.textContent = 'CONECTAR AL NÚCLEO';
     if(loadingText) loadingText.classList.add('hidden');
