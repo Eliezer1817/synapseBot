@@ -145,6 +145,7 @@ body {
 
 .field { margin-bottom: 0.75rem; }
 .field label { display: block; font-size: 0.5rem; letter-spacing: 0.16em; color: rgba(255,255,255,0.38); margin-bottom: 0.25rem; text-transform: uppercase; }
+.field-hint { display: block; margin-top: 0.35rem; font-size: 0.62rem; letter-spacing: 0.02em; color: rgba(255,255,255,0.42); text-transform: none; line-height: 1.35; }
 .input-wrap input {
   width: 100%; background: rgba(0,0,0,0.45); border: 1px solid rgba(255,150,90,0.18);
   border-radius: 10px; padding: 0.7rem 0.85rem; color: #fff;
@@ -1052,11 +1053,12 @@ input[type="range"]::-webkit-slider-thumb {
             </div>
           </div>
           <div class="field">
-            <label for="passwordInput">ACCESS_KEY</label>
+            <label for="passwordInput">Contraseña de IQ Option</label>
             <div class="input-wrap">
-              <input type="password" id="passwordInput" name="key" placeholder="••••••••" required />
+              <input type="password" id="passwordInput" name="password" placeholder="••••••••" required autocomplete="current-password" />
               <span class="eye" id="toggleKey">👁</span>
             </div>
+            <span class="field-hint">La misma que usás en la app de IQ Option.</span>
           </div>
           <button type="submit" class="btn-core" id="connectBtn">CONECTAR AL NÚCLEO</button>
           <div class="paywall" id="paywallBox">
@@ -2148,7 +2150,7 @@ async function login() {
   const loadingText = document.getElementById('loadingText');
 
   if (!email || !password) {
-    showAppToast({ kind: 'warn', message: 'Ingresá email y access key de IQ Option.' });
+    showAppToast({ kind: 'warn', message: 'Ingresá email y contraseña de IQ Option.' });
     return;
   }
 
@@ -2192,15 +2194,17 @@ async function login() {
         });
         return;
       }
-      if (
-        code === 'iq_connect_timeout' ||
-        code === 'iq_auth_failed' ||
-        res.status === 504 ||
-        res.status === 401
-      ) {
+      if (code === 'iq_auth_failed' || res.status === 401) {
         showAppToast({
           kind: 'err',
-          message: 'No se pudo conectar a IQ Option. Revisá demo/real y tu access key.'
+          message: 'No se pudo autenticar en IQ Option. Usá el email y la contraseña de tu cuenta (no un token ni access key).'
+        });
+        return;
+      }
+      if (code === 'iq_connect_timeout' || res.status === 504) {
+        showAppToast({
+          kind: 'err',
+          message: 'IQ Option no respondió a tiempo. Probá de nuevo; si sigue fallando, revisá demo/real o intentá más tarde.'
         });
         return;
       }
@@ -2233,7 +2237,7 @@ async function login() {
     if (err && err.name === 'AbortError') {
       showAppToast({
         kind: 'err',
-        message: 'No se pudo conectar a IQ Option. Revisá demo/real y tu access key.'
+        message: 'IQ Option no respondió a tiempo. Probá de nuevo; si sigue fallando, revisá demo/real o intentá más tarde.'
       });
     } else {
       showAppToast({
