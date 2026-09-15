@@ -1,11 +1,9 @@
-# ============================================
-# conexion.py (VERSIÓN COMPATIBLE CON API)
-# ============================================
 from __future__ import annotations
 import sys
 import json
 import time
 import os
+import threading
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from typing import Optional
 from iqoptionapi.stable_api import IQ_Option
@@ -14,7 +12,10 @@ from iqoptionapi.stable_api import IQ_Option
 CONNECT_TIMEOUT_SEC = float(os.environ.get("SYNAPSE_IQ_CONNECT_TIMEOUT", "12"))
 
 USER_CONNECT_HINT = (
-    "No se pudo conectar a IQ Option (revisá demo/real y access key)"
+    "No se pudo conectar a IQ Option (revisá email y contraseña de la cuenta)"
+)
+USER_TIMEOUT_HINT = (
+    "IQ Option no respondió a tiempo. Probá de nuevo; si sigue fallando, intentá más tarde."
 )
 
 
@@ -27,21 +28,57 @@ class IQOptionLoginError(Exception):
 
 
 class IQOptionConnectTimeout(IQOptionLoginError):
-    def __init__(self, message: str = USER_CONNECT_HINT):
+    def __init__(self, message: str = USER_TIMEOUT_HINT):
         super().__init__(message, code="iq_connect_timeout")
 
 
-def _connect_once(email: str, password: str) -> IQ_Option:
+def _force_close_iq(iq: Optional[IQ_Option]) -> None:
+    """Cierra el WSS al timeout para no dejar hilos zombie.
+
+    `api.close()` hace `websocket_thread.join()` sin tope; por eso cerramos el
+    socket primero y solo intentamos `close()` en un hilo daemon con join corto.
+    """
+    if iq is None:
+        return
+    api = getattr(iq, "api", None)
+    if api is None:
+        return
+
+    ws = getattr(api, "websocket", None)
+    if ws is not None:
+        try:
+            ws.keep_running = False
+        except Exception:
+            pass
+        try:
+            ws.close()
+        except Exception:
+            pass
+
+    def _api_close() -> None:
+        try:
+            api.close()
+        except Exception:
+            pass
+
+    t = threading.Thread(target=_api_close, name="iq-wss-force-close", daemon=True)
+    t.start()
+    t.join(timeout=2.0)
+
+
+def _connect_once(email: str, password: str, holder: dict) -> IQ_Option:
     """Un intento de connect + verificación de sesión (puede colgarse en WSS)."""
     iq = IQ_Option(email, password)
+    holder["iq"] = iq
     check, reason = iq.connect()
     if not check:
-        # WSS abrió pero no autenticó / credenciales / demo-real cruzado
+        _force_close_iq(iq)
         raise IQOptionLoginError(USER_CONNECT_HINT, code="iq_auth_failed")
     time.sleep(0.5)
     try:
         iq.get_balance()
     except Exception:
+        _force_close_iq(iq)
         raise IQOptionLoginError(USER_CONNECT_HINT, code="iq_auth_failed")
     return iq
 
@@ -53,25 +90,24 @@ def _connect(
     backoff: float = 1.0,
     timeout_sec: float | None = None,
 ) -> IQ_Option:
-    """Conecta a IQ Option con tope de tiempo (default 12s). No reintenta por defecto:
-    un hang de WSS/SSID no se arregla esperando más dentro del mismo request.
+    """Conecta a IQ Option con tope de tiempo (default 12s). Al timeout force-close del WSS.
     """
     budget = CONNECT_TIMEOUT_SEC if timeout_sec is None else float(timeout_sec)
     attempts = max(0, int(retries)) + 1
     last_exc: BaseException | None = None
 
-    # Un solo worker: el hilo puede quedar zombie si la lib no cancela el socket,
-    # pero el caller siempre recibe timeout y puede responder HTTP.
     with ThreadPoolExecutor(max_workers=1) as pool:
         for i in range(attempts):
             remaining = budget
             if remaining <= 0:
                 break
-            fut = pool.submit(_connect_once, email, password)
+            holder: dict = {"iq": None}
+            fut = pool.submit(_connect_once, email, password, holder)
             try:
                 return fut.result(timeout=remaining)
             except FuturesTimeoutError:
-                raise IQOptionConnectTimeout(USER_CONNECT_HINT)
+                _force_close_iq(holder.get("iq"))
+                raise IQOptionConnectTimeout(USER_TIMEOUT_HINT)
             except IQOptionLoginError as e:
                 last_exc = e
                 if i < attempts - 1:
@@ -81,6 +117,7 @@ def _connect(
                 raise
             except Exception as e:
                 last_exc = e
+                _force_close_iq(holder.get("iq"))
                 if i < attempts - 1:
                     time.sleep(backoff * (i + 1))
                     budget -= backoff * (i + 1)
@@ -89,7 +126,7 @@ def _connect(
 
     if isinstance(last_exc, IQOptionLoginError):
         raise last_exc
-    raise IQOptionConnectTimeout(USER_CONNECT_HINT)
+    raise IQOptionConnectTimeout(USER_TIMEOUT_HINT)
 
 
 def get_real_account_data(email: str, password: str) -> dict:
