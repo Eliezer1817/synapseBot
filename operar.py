@@ -30,6 +30,19 @@ BB_SQUEEZE_RATIO = 0.70
 LOW_LIQUIDITY_HOURS_UTC = {21, 22, 23, 0}
 COOLDOWN_AFTER_LOSS_SEC = TIMEFRAME_SECONDS
 
+# ====================================================================
+# ESTRATEGIAS SELECCIONABLES (EUR/USD OTC unicamente)
+# ====================================================================
+ESTRATEGIAS = ("original", "third_candle")
+TIMEFRAMES_VALIDOS = {60, 300}
+
+# --- Third Candle: logica exacta del laboratorio (solo CALL) ---
+TC_BLOQUE_MIN = 12        # bloque minimo de velas del lab
+TC_BLOQUE_MAX = 24        # bloque maximo de velas del lab
+TC_BLOQUE_DEFAULT = 24    # como en el lab: look = min(24, i)
+TC_DIST_MIN = 0.00025     # precio >= 0.025% por encima de la SMA del bloque
+TC_GREENS_MIN = 0.58      # minimo 58% de velas verdes en el bloque
+
 def _chaos_kill(point: str) -> None:
     """Si hay chaos arm one-shot en este point, mata el proceso (Fly reinicia)."""
     try:
@@ -62,6 +75,7 @@ class GestorRiesgoInteligente:
             "max_perdidas_consecutivas": 4,
             "stop_loss_diario": 5.0,
             "monto_maximo": 10,
+            "cooldown_after_loss_sec": COOLDOWN_AFTER_LOSS_SEC,
         }
         if config_riesgo:
             self.config.update(config_riesgo)
@@ -100,8 +114,9 @@ class GestorRiesgoInteligente:
             self.motivo_bloqueo = f"Stop loss diario ({stop_pct}% / ${stop_abs:.2f})"
             return False, self.motivo_bloqueo
 
-        if time.time() - self.last_loss_ts < COOLDOWN_AFTER_LOSS_SEC:
-            restante = int(COOLDOWN_AFTER_LOSS_SEC - (time.time() - self.last_loss_ts))
+        cooldown = float(self.config.get("cooldown_after_loss_sec", COOLDOWN_AFTER_LOSS_SEC))
+        if time.time() - self.last_loss_ts < cooldown:
+            restante = int(cooldown - (time.time() - self.last_loss_ts))
             return False, f"Cooldown post-perdida ({restante}s)"
 
         return True, ""
@@ -164,12 +179,12 @@ def _obtener_gestor(config_riesgo=None):
     return _gestor_global
 
 
-def get_latest_market_data(iq: IQ_Option) -> pd.DataFrame:
+def get_latest_market_data(iq: IQ_Option, timeframe: int = TIMEFRAME_SECONDS) -> pd.DataFrame:
     if not iq:
         raise ValueError("La sesion de IQ Option no es valida.")
 
-    print(f"Obteniendo velas de {ACTIVO} (5min)...", file=sys.stderr)
-    candles = iq.get_candles(ACTIVO, TIMEFRAME_SECONDS, CANDLES_HISTORY, time.time())
+    print(f"Obteniendo velas de {ACTIVO} ({timeframe // 60}min)...", file=sys.stderr)
+    candles = iq.get_candles(ACTIVO, timeframe, CANDLES_HISTORY, time.time())
     if not candles:
         raise RuntimeError(f"No se pudieron obtener velas de {ACTIVO}.")
 
@@ -258,6 +273,112 @@ def _bb_impulso_bajista(prev, curr) -> bool:
 def _sesion_baja_liquidez() -> bool:
     hora = datetime.now(timezone.utc).hour
     return hora in LOW_LIQUIDITY_HOURS_UTC
+
+
+# ====================================================================
+# THIRD CANDLE - replica de la logica del laboratorio (lab.js)
+# analyzeThird: 2 velas verdes, la 2a cierra sobre la 1a, sesgo alcista
+# -> CALL al abrir la 3a vela. Exclusivamente alcista: nunca PUT.
+# ====================================================================
+def _es_vela_verde(row) -> bool:
+    """Verde como en el laboratorio: close >= open."""
+    return float(row["close"]) >= float(row["open"])
+
+
+def _normalizar_bloque(bloque) -> int:
+    """Bloque configurable del laboratorio: minimo 12, maximo 24."""
+    try:
+        bloque = int(bloque)
+    except (TypeError, ValueError):
+        bloque = TC_BLOQUE_DEFAULT
+    return max(TC_BLOQUE_MIN, min(TC_BLOQUE_MAX, bloque))
+
+
+def sesgo_third_candle(df_completas, bloque=TC_BLOQUE_DEFAULT):
+    """Sesgo del laboratorio sobre el bloque de velas completas.
+
+    Reproduce marketBias() del lab: look = min(bloque, velas disponibles);
+    con menos de 12 velas -> neutral. Alcista si: px > SMA del bloque,
+    (px - SMA)/SMA >= 0.025% y proporcion de velas verdes >= 58%.
+    Devuelve (sesgo, detalle).
+    """
+    bloque = _normalizar_bloque(bloque)
+    n = len(df_completas)
+    look = min(bloque, n)
+    detalle = {"bloque": look, "bloque_min": TC_BLOQUE_MIN}
+    if look < TC_BLOQUE_MIN:
+        return "neutral", {**detalle, "razon": f"Bloque insuficiente ({look} < {TC_BLOQUE_MIN} velas)"}
+
+    sma = float(df_completas["close"].iloc[-look:].mean())
+    px = float(df_completas.iloc[-1]["close"])
+    verdes = float((df_completas["close"].iloc[-look:] >= df_completas["open"].iloc[-look:]).mean())
+    dist = ((px - sma) / sma) if sma else 0.0
+    detalle.update({"px": px, "sma": sma, "dist_pct": dist * 100.0, "verdes_pct": verdes * 100.0})
+
+    if px > sma and dist >= TC_DIST_MIN and verdes >= TC_GREENS_MIN:
+        return "alcista", detalle
+    return "neutral", detalle
+
+
+def predecir_decision_third_candle(df_completas, bloque=TC_BLOQUE_DEFAULT, forzar: bool = False) -> Dict[str, Any]:
+    """Third Candle (laboratorio): 2 verdes, 2a cierra sobre la 1a, sesgo alcista -> CALL en la 3a.
+
+    df_completas: solo velas COMPLETAS (la ultima es la 2a vela, la confirmacion).
+    La entrada es al abrir la 3a vela; la senal se evalua al cierre de esa vela
+    y solo es acierto si el cierre supera la apertura. Solo CALL, nunca PUT.
+    """
+    base = {
+        "score": 0,
+        "score_call": 0,
+        "score_put": 0,
+        "lado_hipotetico": None,
+        "componentes": {},
+        "precio_entrada": None,
+        "detalle": "",
+    }
+    if df_completas is None or getattr(df_completas, "empty", True) or len(df_completas) < TC_BLOQUE_MIN:
+        return {**base, "decision": "SKIP", "razon": "TC: historico insuficiente (<12 velas)", "probabilidad": "N/A", "tipo": None}
+
+    a = df_completas.iloc[-2]  # primera vela del patron
+    b = df_completas.iloc[-1]  # segunda vela (confirmacion)
+    precio = float(b["close"])
+
+    patron = _es_vela_verde(a) and _es_vela_verde(b)
+    segunda_sobre_primera = patron and float(b["close"]) > float(a["close"])
+    sesgo, detalle_sesgo = sesgo_third_candle(df_completas, bloque=bloque)
+
+    componentes = {
+        "patron": "bullish" if segunda_sobre_primera else "neutral",
+        "sesgo": sesgo,
+        "bloque": detalle_sesgo.get("bloque"),
+        "verdes_pct": round(detalle_sesgo.get("verdes_pct", 0.0), 1),
+        "dist_pct": round(detalle_sesgo.get("dist_pct", 0.0), 4),
+    }
+    detalle = (
+        f"TC: {'2 verdes' if patron else 'sin patron de 2 verdes'} | 2a "
+        f"{'>' if segunda_sobre_primera else '<='} 1a | sesgo {sesgo} "
+        f"(bloque {detalle_sesgo.get('bloque')}, dist {detalle_sesgo.get('dist_pct', 0.0):.3f}%, "
+        f"verdes {detalle_sesgo.get('verdes_pct', 0.0):.1f}%)"
+    )
+    base.update({"componentes": componentes, "precio_entrada": precio, "detalle": detalle})
+
+    if not patron:
+        return {**base, "decision": "SKIP", "razon": f"TC: sin patron de 2 verdes - {detalle}", "probabilidad": "N/A", "tipo": None}
+    if not segunda_sobre_primera:
+        return {**base, "decision": "SKIP", "razon": f"TC: la 2a no cierra sobre la 1a - {detalle}", "probabilidad": "N/A", "tipo": None}
+    if sesgo != "alcista":
+        return {**base, "decision": "SKIP", "razon": f"TC: sesgo {sesgo} (no alcista) - {detalle}", "probabilidad": "N/A", "tipo": None}
+
+    return {
+        **base,
+        "decision": "CALL",
+        "razon": f"TC CALL: 2 verdes + 2a sobre 1a + sesgo alcista - {detalle}",
+        "probabilidad": "1.0000",
+        "tipo": "call",
+        "score": 1,
+        "score_call": 1,
+        "lado_hipotetico": "call",
+    }
 
 
 def predecir_decision(model_or_df, df_vela_actual=None, forzar: bool = False) -> Dict[str, Any]:
@@ -391,10 +512,10 @@ def predecir_decision(model_or_df, df_vela_actual=None, forzar: bool = False) ->
     }
 
 
-def ejecutar_trade(iq: IQ_Option, tipo: str, monto: float, activo: str = ACTIVO) -> Tuple[bool, Any, str]:
+def ejecutar_trade(iq: IQ_Option, tipo: str, monto: float, activo: str = ACTIVO, expiration: int = EXPIRATION_TIME) -> Tuple[bool, Any, str]:
     try:
-        print(f"Ejecutando trade {tipo.upper()} por ${monto} en {activo} (exp {EXPIRATION_TIME}m)...", file=sys.stderr)
-        check, id_operation = iq.buy(monto, activo, tipo, EXPIRATION_TIME)
+        print(f"Ejecutando trade {tipo.upper()} por ${monto} en {activo} (exp {expiration}m)...", file=sys.stderr)
+        check, id_operation = iq.buy(monto, activo, tipo, expiration)
         if check:
             print(f"Trade ejecutado. ID: {id_operation}", file=sys.stderr)
             return True, id_operation, f"Trade {tipo.upper()} ejecutado - ID: {id_operation}"
@@ -466,9 +587,13 @@ def ejecutar_operacion(
     forzar_operacion: bool = False,
     config_riesgo: dict = None,
     enforce_idempotency: bool = False,
+    estrategia: str = "original",
+    timeframe: int = TIMEFRAME_SECONDS,
+    bloque_velas: int = TC_BLOQUE_DEFAULT,
 ) -> Dict[str, Any]:
     print("\n" + "-" * 50, file=sys.stderr)
-    print(f"ANALISIS EMA/MACD/BB - Modo: {modo.upper()}", file=sys.stderr)
+    nombre_estrategia = "THIRD CANDLE (lab, solo CALL)" if estrategia == "third_candle" else "EMA/MACD/BB"
+    print(f"ANALISIS {nombre_estrategia} - Modo: {modo.upper()}", file=sys.stderr)
     print("-" * 50, file=sys.stderr)
 
     defaults_riesgo = {
@@ -480,6 +605,19 @@ def ejecutar_operacion(
     if config_riesgo:
         defaults_riesgo.update(config_riesgo)
     gestor_riesgo = _obtener_gestor(defaults_riesgo)
+
+    # Estrategia y temporalidad (EUR/USD OTC unicamente; 1m o 5m)
+    if estrategia not in ESTRATEGIAS:
+        raise ValueError(f"Estrategia desconocida: {estrategia}")
+    try:
+        timeframe = int(timeframe)
+    except (TypeError, ValueError):
+        timeframe = TIMEFRAME_SECONDS
+    if timeframe not in TIMEFRAMES_VALIDOS:
+        raise ValueError(f"Temporalidad invalida: {timeframe}s (solo 60 o 300)")
+    expiration = 1 if timeframe == 60 else 5  # expiracion = temporalidad elegida
+    # Cooldown post-perdida escalado a la temporalidad (no bloquear de mas en 1m)
+    gestor_riesgo.config["cooldown_after_loss_sec"] = timeframe
 
     try:
         balance_type = "PRACTICE" if modo == "demo" else "REAL"
@@ -508,16 +646,32 @@ def ejecutar_operacion(
                 "estadisticas_riesgo": gestor_riesgo.obtener_estadisticas(),
             }
 
-        df_historial = get_latest_market_data(iq)
-        if len(df_historial) < 50:
-            raise ValueError(f"Historico insuficiente ({len(df_historial)} velas). Se necesitan >=50.")
+        df_historial = get_latest_market_data(iq, timeframe)
+        min_velas = TC_BLOQUE_MIN + 2 if estrategia == "third_candle" else 50
+        if len(df_historial) < min_velas:
+            raise ValueError(f"Historico insuficiente ({len(df_historial)} velas). Se necesitan >= {min_velas}.")
 
-        df_con_features = calcular_features(df_historial)
-        if df_con_features.empty or len(df_con_features) < 2:
-            raise ValueError("No se pudieron calcular indicadores")
+        if estrategia == "third_candle":
+            # Tercera vela: descartar la vela en formacion si viene incluida
+            now_open = candle_open_unix(time.time(), timeframe)
+            df_completas = df_historial
+            if "from" in df_historial.columns and len(df_historial):
+                try:
+                    if int(float(df_historial.iloc[-1]["from"])) == now_open:
+                        df_completas = df_historial.iloc[:-1]
+                except (TypeError, ValueError):
+                    pass
+            print("Evaluando Third Candle: 2 verdes + 2a sobre 1a + sesgo alcista del laboratorio...", file=sys.stderr)
+            decision_data = predecir_decision_third_candle(
+                df_completas, bloque=_normalizar_bloque(bloque_velas), forzar=forzar_operacion
+            )
+        else:
+            df_con_features = calcular_features(df_historial)
+            if df_con_features.empty or len(df_con_features) < 2:
+                raise ValueError("No se pudieron calcular indicadores")
 
-        print("Evaluando confluencia EMA + MACD + Bollinger + vela...", file=sys.stderr)
-        decision_data = predecir_decision(df_con_features, forzar=forzar_operacion)
+            print("Evaluando confluencia EMA + MACD + Bollinger + vela...", file=sys.stderr)
+            decision_data = predecir_decision(df_con_features, forzar=forzar_operacion)
 
         if monto is None:
             monto = gestor_riesgo.calcular_monto_operacion(balance_actual)
@@ -557,8 +711,9 @@ def ejecutar_operacion(
             "lado_hipotetico": decision_data.get("lado_hipotetico"),
             "precio_entrada": decision_data.get("precio_entrada"),
             "activo": ACTIVO,
-            "timeframe": TIMEFRAME_SECONDS,
-            "expiracion_min": EXPIRATION_TIME,
+            "estrategia": estrategia,
+            "timeframe": timeframe,
+            "expiracion_min": expiration,
         }
 
         print(f"\nDECISION: {decision_data['decision']}", file=sys.stderr)
@@ -572,7 +727,7 @@ def ejecutar_operacion(
             resultado["razon"] = "Operacion manual forzada sin senal"
             print("Sin senal. Forzando CALL por peticion manual.", file=sys.stderr)
 
-        candle_ts = candle_open_unix()
+        candle_ts = candle_open_unix(timeframe=timeframe)
         resultado["candle_open"] = candle_ts
         resultado["idempotency_key"] = None
 
@@ -610,7 +765,7 @@ def ejecutar_operacion(
             try:
                 if enforce_idempotency and os.environ.get('SYNAPSE_SIMULATE_CRASH_AFTER_CLAIM', '').strip() == '1':
                     raise SystemExit('SYNAPSE_SIMULATE_CRASH_AFTER_CLAIM: crash deliberado pre-BUY')
-                check, trade_id, mensaje = ejecutar_trade(iq, tipo_operacion, monto, ACTIVO)
+                check, trade_id, mensaje = ejecutar_trade(iq, tipo_operacion, monto, ACTIVO, expiration)
                 if enforce_idempotency:
                     _chaos_kill('after_buy')
             except Exception as buy_exc:

@@ -1476,6 +1476,24 @@ input[type="range"]::-webkit-slider-thumb {
                 <input type="number" id="intervalMinutes" class="control-input" value="5" min="1" max="60" step="1">
               </div>
               <div class="control-item">
+                <label class="control-label">Estrategia</label>
+                <select id="strategySelect" class="control-select" onchange="toggleEstrategia()">
+                  <option value="original">EMA/MACD/BB (Original)</option>
+                  <option value="third_candle">Third Candle (solo CALL)</option>
+                </select>
+              </div>
+              <div class="control-item">
+                <label class="control-label">Temporalidad</label>
+                <select id="timeframeSelect" class="control-select" onchange="toggleEstrategia()" disabled>
+                  <option value="300">5 minutos</option>
+                  <option value="60">1 minuto</option>
+                </select>
+              </div>
+              <div class="control-item" id="bloqueContainer" style="display:none;">
+                <label class="control-label">Bloque de velas (12–24)</label>
+                <input type="number" id="bloqueVelas" class="control-input" value="24" min="12" max="24" step="1">
+              </div>
+              <div class="control-item">
                 <label class="control-label">Tipo de Monto</label>
                 <select id="tipoMonto" class="control-select" onchange="toggleTipoMonto()">
                   <option value="auto">🤖 Automático</option>
@@ -1523,6 +1541,7 @@ input[type="range"]::-webkit-slider-thumb {
               <div class="tele-grid">
                 <div class="tele-cell"><span class="k">Fase</span><span class="v" id="serverPhase">DETENIDO</span></div>
                 <div class="tele-cell"><span class="k">Modo</span><span class="v" id="serverMode">—</span></div>
+                <div class="tele-cell"><span class="k">Estrategia</span><span class="v" id="serverStrategy">—</span></div>
                 <div class="tele-cell"><span class="k">Última señal</span><span class="v" id="serverLastDecision">—</span></div>
                 <div class="tele-cell"><span class="k">Score</span><span class="v" id="serverLastScore">—</span></div>
                 <div class="tele-cell"><span class="k">Último ciclo</span><span class="v" id="lastServerOperation">—</span></div>
@@ -2224,6 +2243,35 @@ function resetManualBtn(btn) {
   btn.innerHTML = '<span class="ico"><svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></span><span class="txt"><b>Ejecutar señal</b><span>Disparo manual</span></span>';
 }
 
+function estrategiaSeleccionada() {
+  var sel = document.getElementById('strategySelect');
+  return (sel && sel.value) || 'original';
+}
+function timeframeSeleccionado() {
+  var sel = document.getElementById('timeframeSelect');
+  return parseInt((sel && sel.value) || '300', 10);
+}
+function bloqueSeleccionado() {
+  var el = document.getElementById('bloqueVelas');
+  var v = parseInt((el && el.value) || '24', 10);
+  return Math.max(12, Math.min(24, isNaN(v) ? 24 : v));
+}
+function etiquetaEstrategia(est) {
+  return est === 'third_candle' ? 'Third Candle' : (est === 'original' ? 'Original' : est);
+}
+function toggleEstrategia() {
+  var est = estrategiaSeleccionada();
+  var tf = document.getElementById('timeframeSelect');
+  var bloque = document.getElementById('bloqueContainer');
+  if (est === 'third_candle') {
+    if (tf) tf.disabled = false;
+    if (bloque) bloque.style.display = '';
+  } else {
+    if (tf) { tf.value = '300'; tf.disabled = true; }
+    if (bloque) bloque.style.display = 'none';
+  }
+}
+
 async function operacionManual() {
   const manualBtn = document.getElementById('manualBtn');
   const modo = document.getElementById('accountMode').value;
@@ -2249,6 +2297,9 @@ async function operacionManual() {
         monto: monto,
         ejecutar_auto: true,
         forzar_operacion: false,
+        estrategia: estrategiaSeleccionada(),
+        timeframe: timeframeSeleccionado(),
+        bloque_velas: bloqueSeleccionado(),
         ...appState.riesgoConfig
       })
     });
@@ -2283,14 +2334,18 @@ async function operacionManual() {
 async function iniciarBotServidor() {
   const serverBotBtn = document.getElementById('serverBotBtn');
   const modo = document.getElementById('accountMode').value;
-  const intervalo = parseInt(document.getElementById('intervalMinutes').value);
+  const estrategia = estrategiaSeleccionada();
+  const timeframe = timeframeSeleccionado();
+  const bloqueVelas = bloqueSeleccionado();
+  let intervalo = parseInt(document.getElementById('intervalMinutes').value);
+  if (estrategia === 'third_candle') intervalo = timeframe / 60; // ciclo alineado a la vela
   const tipoMonto = document.getElementById('tipoMonto').value;
   let monto = null;
   if (tipoMonto === 'fijo') {
     monto = parseFloat(document.getElementById('tradeAmount').value);
     if (monto < 1) { alert('El monto mínimo es $1'); return; }
   }
-  if (!confirm(`🚀 ¿INICIAR BOT 24/7 EN SERVIDOR?\n• Modo: ${modo.toUpperCase()}\n• Intervalo: ${intervalo} minutos\n• Riesgo: ${appState.riesgoConfig.riesgo_porcentaje}%`)) return;
+  if (!confirm(`🚀 ¿INICIAR BOT 24/7 EN SERVIDOR?\n• Estrategia: ${etiquetaEstrategia(estrategia)}${estrategia === 'third_candle' ? ' (solo CALL)' : ''}\n• Temporalidad: ${timeframe / 60} min\n• Modo: ${modo.toUpperCase()}\n• Intervalo: ${intervalo} minutos\n• Riesgo: ${appState.riesgoConfig.riesgo_porcentaje}%`)) return;
 
   serverBotBtn.disabled = true;
   const btnLabel = serverBotBtn.querySelector('b');
@@ -2299,7 +2354,7 @@ async function iniciarBotServidor() {
     const res = await fetch('/iniciar_bot_servidor', {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify({ modo, intervalo, monto, ...appState.riesgoConfig })
+      body: JSON.stringify({ modo, intervalo, monto, estrategia, timeframe, bloque_velas: bloqueVelas, ...appState.riesgoConfig })
     });
     const data = await res.json();
     if (!res.ok || !data.success) throw new Error(data.error || 'Error al iniciar bot');
@@ -2307,6 +2362,7 @@ async function iniciarBotServidor() {
     mostrarPanelNucleo();
     document.getElementById('serverInterval').textContent = intervalo;
     document.getElementById('serverMode').textContent = modo.toUpperCase();
+    document.getElementById('serverStrategy').textContent = etiquetaEstrategia(estrategia).toUpperCase();
     document.getElementById('serverActivity').textContent = 'Núcleo iniciado. Conectando y armando el primer ciclo...';
     iniciarMonitorServidor(true); cargarEstadisticasReales();
     alert('✅ Bot 24/7 iniciado en servidor');
@@ -2494,6 +2550,11 @@ function pintarPulsoServidor(data) {
   if (phaseEl) phaseEl.textContent = _faseLabel(fase);
   var modeEl = document.getElementById('serverMode');
   if (modeEl) modeEl.textContent = ((data && (data.modo || (data.config && data.config.modo))) || '—').toString().toUpperCase();
+  var stratEl = document.getElementById('serverStrategy');
+  if (stratEl) {
+    var estCfg = (data && data.config && data.config.estrategia) || '';
+    stratEl.textContent = estCfg ? etiquetaEstrategia(estCfg).toUpperCase() : '—';
+  }
 
   var activity = document.getElementById('serverActivity');
   if (activity) {
@@ -2683,7 +2744,7 @@ function renderHistorial() {
           <span class="trade-time">${trade.timestamp}</span>
         </div>
         <div class="trade-info">
-          Modo: ${trade.modo.toUpperCase()} | Prob: ${trade.probabilidad} | Monto: $${trade.monto}
+          ${trade.activo || 'EUR/USD OTC'} · ${(trade.timeframe || 300) / 60}m · ${etiquetaEstrategia(trade.estrategia || 'original')} | Modo: ${trade.modo.toUpperCase()} | Monto: $${trade.monto}
         </div>
         <div class="trade-id">ID: ${trade.trade_id}</div>
         <div class="trade-details">${resultHTML}</div>
@@ -2723,6 +2784,9 @@ async function cargarHistorialServidor() {
         decision: op.decision || '—',
         probabilidad: op.probabilidad || 'N/A',
         modo: op.modo || 'demo',
+        activo: op.activo || 'EUR/USD OTC',
+        timeframe: op.timeframe || 300,
+        estrategia: op.estrategia || 'original',
         ejecutado: !!op.ejecutado,
         trade_id: op.trade_id,
         resultado: rt,

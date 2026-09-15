@@ -9,7 +9,7 @@ import uuid
 import threading
 from urllib.parse import urlparse, parse_qs
 from conexion import _connect
-from operar import ejecutar_operacion
+from operar import ejecutar_operacion, candle_open_unix
 from datetime import datetime
 import database  # ✅ Importación correcta
 import crypto_util
@@ -366,9 +366,26 @@ def ejecutar_bot_servidor():
     print(f"🎮 Modo: {bot_config.get('modo', 'demo').upper()}")
     print(f"📊 Configuración riesgo: {bot_config.get('riesgo_porcentaje', 2)}%")
     
+    # Estrategia seleccionable (original sin cambios / Third Candle del laboratorio)
+    estrategia = bot_config.get('estrategia', 'original')
+    try:
+        timeframe = int(bot_config.get('timeframe', 300) or 300)
+    except (TypeError, ValueError):
+        timeframe = 300
+    if estrategia == 'third_candle' and timeframe not in (60, 300):
+        timeframe = 300
+    bloque_velas = bot_config.get('bloque_velas', 24)
+    print(f"🧠 Estrategia: {estrategia} | Temporalidad: {timeframe // 60} min | Bloque: {bloque_velas}")
+
     # 🔥 TIMING PRECISO: Calcular el próximo ciclo exacto
-    intervalo_segundos = bot_config.get('intervalo', 5) * 60
-    siguiente_ciclo = time.time()
+    if estrategia == 'third_candle':
+        # Third Candle: ciclo alineado al apertura de cada vela
+        # (entrada "al abrir la 3a vela", expiracion = temporalidad)
+        intervalo_segundos = timeframe
+        siguiente_ciclo = candle_open_unix(time.time(), timeframe) + timeframe + 5
+    else:
+        intervalo_segundos = bot_config.get('intervalo', 5) * 60
+        siguiente_ciclo = time.time()
     
     # Estadísticas de inicio
     bot_stats['inicio_timestamp'] = time.time()
@@ -434,8 +451,8 @@ def ejecutar_bot_servidor():
             # Stop / racha: operar.py ya bloquea. Si viene STOP_LOSS, apagar el loop 24/7.
             stop_loss_diario = bot_config.get('stop_loss_diario', 5)
             
-            from operar import ACTIVO, candle_open_unix
-            candle_ts = candle_open_unix()
+            from operar import ACTIVO
+            candle_ts = candle_open_unix(time.time(), timeframe)
             claimed_cycle, cycle_key = database.claim_candle_cycle(
                 ACTIVO,
                 candle_ts,
@@ -451,7 +468,10 @@ def ejecutar_bot_servidor():
                     candle_open=candle_ts,
                 )
                 # Empujar siguiente ciclo al borde de la próxima vela
-                siguiente_ciclo = candle_ts + max(intervalo_segundos, 300)
+                if estrategia == 'third_candle':
+                    siguiente_ciclo = candle_open_unix(time.time(), timeframe) + timeframe + 5
+                else:
+                    siguiente_ciclo = candle_ts + max(intervalo_segundos, 300)
                 bot_stats['proxima_operacion_timestamp'] = siguiente_ciclo
                 database.actualizar_estadisticas_bot(bot_stats)
                 continue
@@ -465,7 +485,7 @@ def ejecutar_bot_servidor():
 
             _set_fase_bot(
                 'analizando',
-                f'Ciclo {ciclo_numero}: leyendo velas y evaluando señal EMA/MACD/BB...',
+                f'Ciclo {ciclo_numero}: leyendo velas y evaluando señal {estrategia}...',
                 ciclo=ciclo_numero,
                 modo=bot_config.get('modo', 'demo'),
                 candle_open=candle_ts,
@@ -479,6 +499,9 @@ def ejecutar_bot_servidor():
                 ejecutar_auto=True,
                 forzar_operacion=False,
                 enforce_idempotency=True,
+                estrategia=estrategia,
+                timeframe=timeframe,
+                bloque_velas=bloque_velas,
                 config_riesgo={
                     'riesgo_porcentaje': bot_config.get('riesgo_porcentaje', 2.0),
                     'max_perdidas_consecutivas': bot_config.get('max_perdidas_consecutivas', 4),
@@ -514,6 +537,8 @@ def ejecutar_bot_servidor():
                     'modo': bot_config.get('modo', 'demo'),
                     'activo': resultado.get('activo') or 'EURUSD-OTC',
                     'expiracion_min': resultado.get('expiracion_min') or 5,
+                    'estrategia': resultado.get('estrategia') or estrategia,
+                    'timeframe': resultado.get('timeframe') or timeframe,
                     'candle_open': resultado.get('candle_open'),
                 })
             except Exception as res_err:
@@ -599,6 +624,10 @@ def ejecutar_bot_servidor():
             database.actualizar_estadisticas_bot(bot_stats)
             database.agregar_operacion(resultado)
             
+            # Third Candle: realinear el próximo ciclo al apertura de la próxima vela
+            if estrategia == 'third_candle':
+                siguiente_ciclo = candle_open_unix(time.time(), timeframe) + timeframe + 5
+
             # 🔥 MOSTRAR ESTADÍSTICAS ACTUALIZADAS
             print(f"📊 ESTADÍSTICAS BOT 24/7:")
             print(f"   Operaciones totales: {bot_stats['operaciones_ejecutadas']}")
@@ -623,6 +652,8 @@ def ejecutar_bot_servidor():
             _set_fase_bot('error', f'Error en ciclo: {e}. Reintentando en 2 min.')
             # En caso de error, esperar 2 minutos antes de reintentar
             siguiente_ciclo = time.time() + 120
+            if estrategia == 'third_candle':
+                siguiente_ciclo = candle_open_unix(time.time(), timeframe) + timeframe + 5
             bot_stats['proxima_operacion_timestamp'] = siguiente_ciclo
             database.actualizar_estadisticas_bot(bot_stats)
     
@@ -1251,6 +1282,12 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                     monto = config.get('monto')
                     ejecutar_auto = config.get('ejecutar_auto', True)
                     forzar_operacion = config.get('forzar_operacion', False)
+                    estrategia = config.get('estrategia', 'original')
+                    try:
+                        timeframe = int(config.get('timeframe', 300) or 300)
+                    except (TypeError, ValueError):
+                        timeframe = 300
+                    bloque_velas = config.get('bloque_velas', 24)
                     
                     print(f"\n{'='*70}")
                     print(f"🎯 OPERACIÓN MANUAL SOLICITADA")
@@ -1260,6 +1297,7 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                     print(f"Monto: {'AUTO' if monto is None else f'${monto}'}")
                     print(f"Auto: {'SÍ' if ejecutar_auto else 'NO'}")
                     print(f"Forzar: {'SÍ' if forzar_operacion else 'NO'}")
+                    print(f"Estrategia: {estrategia} | Temporalidad: {timeframe // 60} min")
                     print(f"{'='*70}\n")
                     
                     # EJECUTAR OPERACIÓN MANUAL
@@ -1269,6 +1307,9 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                         monto=monto,
                         ejecutar_auto=ejecutar_auto,
                         forzar_operacion=forzar_operacion,
+                        estrategia=estrategia,
+                        timeframe=timeframe,
+                        bloque_velas=bloque_velas,
                         config_riesgo={
                             'riesgo_porcentaje': config.get('riesgo_porcentaje', 2.0),
                             'max_perdidas_consecutivas': config.get('max_perdidas_consecutivas', 4),
