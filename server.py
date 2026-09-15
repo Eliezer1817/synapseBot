@@ -8,7 +8,7 @@ import time
 import uuid
 import threading
 from urllib.parse import urlparse, parse_qs
-from conexion import _connect
+from conexion import _connect, IQOptionLoginError, IQOptionConnectTimeout
 from operar import ejecutar_operacion, candle_open_unix
 from datetime import datetime
 import database  # ✅ Importación correcta
@@ -1117,19 +1117,46 @@ class MyHttpRequestHandler(http.server.BaseHTTPRequestHandler):
                     traceback.print_exc()
                     raw = str(e)
                     license_required = raw.startswith('LICENSE_REQUIRED')
-                    client_msg = crypto_util.safe_client_error(
-                        e, fallback="No se pudo iniciar sesión. Revisá credenciales o intentá de nuevo."
-                    )
+                    missing_key = 'SYNAPSE_CREDENTIALS_KEY' in raw
+                    error_code = None
+                    status = 500
+                    if isinstance(e, IQOptionConnectTimeout):
+                        error_code = getattr(e, 'code', 'iq_connect_timeout')
+                        status = 504
+                        client_msg = str(e) or (
+                            "No se pudo conectar a IQ Option (revisá demo/real y access key)"
+                        )
+                    elif isinstance(e, IQOptionLoginError):
+                        error_code = getattr(e, 'code', 'iq_auth_failed')
+                        status = 401
+                        client_msg = str(e) or (
+                            "No se pudo conectar a IQ Option (revisá demo/real y access key)"
+                        )
+                    else:
+                        client_msg = crypto_util.safe_client_error(
+                            e, fallback="No se pudo iniciar sesión. Revisá credenciales o intentá de nuevo."
+                        )
                     if license_required:
                         client_msg = raw.split('LICENSE_REQUIRED:', 1)[-1].strip()
-                    self.send_response(402 if license_required else 500)
-                    self.send_header('Content-type', 'application/json')
-                    self.end_headers()
-                    self.wfile.write(json.dumps({
+                        status = 402
+                        error_code = 'license_required'
+                    elif missing_key:
+                        client_msg = (
+                            "El servidor no tiene configurada la clave de cifrado. Contactá al admin."
+                        )
+                        status = 503
+                        error_code = 'missing_credentials_key'
+                    payload = {
                         'success': False,
                         'error': client_msg,
                         'license_required': license_required,
-                    }).encode('utf-8'))
+                    }
+                    if error_code:
+                        payload['error_code'] = error_code
+                    self.send_response(status)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps(payload).encode('utf-8'))
             
 
             elif self.path == '/crear_pago':
