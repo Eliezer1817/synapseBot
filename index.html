@@ -984,6 +984,18 @@ input[type="range"]::-webkit-slider-thumb {
 .paywall img.pay-qr{width:180px;height:180px;margin:.6rem auto;display:block;background:#fff;padding:8px;border-radius:8px}
 .paywall .pay-status{margin-top:.6rem;font-size:.78rem}
 .paywall .ok{color:#5dffb0}
+
+.sb-toast-host{position:fixed;top:1rem;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:.6rem;width:min(92vw,420px);pointer-events:none}
+.sb-toast{pointer-events:auto;padding:1rem 1.1rem;border-radius:12px;border:1px solid rgba(255,255,255,.18);background:rgba(12,16,28,.94);backdrop-filter:blur(10px);box-shadow:0 12px 40px rgba(0,0,0,.45);color:#e8eefc;font-size:.85rem;line-height:1.45;animation:sbToastIn .2s ease}
+.sb-toast.err{border-color:rgba(255,90,90,.55)}
+.sb-toast.warn{border-color:rgba(255,180,60,.55);background:linear-gradient(135deg,rgba(255,140,0,.14),rgba(12,16,28,.94))}
+.sb-toast .sb-toast-msg{margin:0;padding-right:1.2rem}
+.sb-toast .sb-toast-cta{display:inline-block;margin-top:.7rem;padding:.5rem .85rem;border-radius:8px;border:1px solid rgba(255,180,60,.6);background:rgba(255,140,0,.25);color:#ffe0a0;font-size:.78rem;font-weight:700;cursor:pointer}
+.sb-toast .sb-toast-micro{margin:.45rem 0 0;font-size:.7rem;opacity:.8}
+.sb-toast .sb-toast-x{position:absolute;top:.55rem;right:.65rem;background:none;border:0;color:inherit;opacity:.55;cursor:pointer;font-size:1rem;line-height:1}
+.sb-toast{position:relative}
+@keyframes sbToastIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+
 </style>
 </head>
 <body>
@@ -2087,6 +2099,48 @@ async function logout() {
   }
 }
 
+
+function showAppToast(opts) {
+  var host = document.getElementById('sbToastHost');
+  if (!host) return;
+  var kind = (opts && opts.kind) || 'err';
+  var el = document.createElement('div');
+  el.className = 'sb-toast ' + kind;
+  el.setAttribute('role', 'status');
+  var x = document.createElement('button');
+  x.type = 'button';
+  x.className = 'sb-toast-x';
+  x.setAttribute('aria-label', 'Cerrar');
+  x.textContent = '×';
+  x.onclick = function () { el.remove(); };
+  var msg = document.createElement('p');
+  msg.className = 'sb-toast-msg';
+  msg.textContent = (opts && opts.message) || '';
+  el.appendChild(x);
+  el.appendChild(msg);
+  if (opts && opts.ctaLabel) {
+    var cta = document.createElement('button');
+    cta.type = 'button';
+    cta.className = 'sb-toast-cta';
+    cta.textContent = opts.ctaLabel;
+    cta.onclick = function () {
+      if (typeof opts.ctaAction === 'function') opts.ctaAction();
+      el.remove();
+    };
+    el.appendChild(cta);
+  }
+  if (opts && opts.micro) {
+    var micro = document.createElement('p');
+    micro.className = 'sb-toast-micro';
+    micro.textContent = opts.micro;
+    el.appendChild(micro);
+  }
+  host.appendChild(el);
+  if (!(opts && opts.sticky)) {
+    setTimeout(function () { if (el.parentNode) el.remove(); }, 5200);
+  }
+}
+
 async function login() {
   const email = document.getElementById('emailInput').value.trim();
   const password = document.getElementById('passwordInput').value;
@@ -2094,7 +2148,7 @@ async function login() {
   const loadingText = document.getElementById('loadingText');
 
   if (!email || !password) {
-    alert('Ingresá email y clave de IQ Option');
+    showAppToast({ kind: 'warn', message: 'Ingresá email y access key de IQ Option.' });
     return;
   }
 
@@ -2115,12 +2169,46 @@ async function login() {
     });
     const json = await res.json();
     if (!res.ok || !json.success) {
-      if (json.license_required) {
+      const code = json.error_code || (json.license_required ? 'license_required' : '');
+      if (code === 'license_required' || json.license_required) {
         mostrarPaywall(true, email);
         const pe = document.getElementById('payEmail');
         if (pe) pe.value = email;
+        showAppToast({
+          kind: 'warn',
+          sticky: true,
+          message: 'Tu cuenta aún no tiene licencia activa. Activá SynapseBot y entrá al dashboard en minutos.',
+          ctaLabel: 'Activar licencia — 100 USDT',
+          micro: 'Pago único · acceso inmediato · sin suscripción',
+          ctaAction: function () {
+            const box = document.getElementById('paywallBox');
+            if (box) {
+              box.classList.add('show');
+              box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+            const btn = document.getElementById('payStartBtn');
+            if (btn) btn.focus();
+          }
+        });
+        return;
       }
-      throw new Error(json.error || 'Error al iniciar sesión');
+      if (
+        code === 'iq_connect_timeout' ||
+        code === 'iq_auth_failed' ||
+        res.status === 504 ||
+        res.status === 401
+      ) {
+        showAppToast({
+          kind: 'err',
+          message: 'No se pudo conectar a IQ Option. Revisá demo/real y tu access key.'
+        });
+        return;
+      }
+      showAppToast({
+        kind: 'err',
+        message: 'Algo falló al conectar. Probá de nuevo en unos segundos.'
+      });
+      return;
     }
 
     saveSessionToken(json.session_token);
@@ -2142,10 +2230,17 @@ async function login() {
     iniciarMonitorServidor(true); cargarEstadisticasReales();
 
   } catch (err) {
-    const msg = (err && err.name === 'AbortError')
-      ? 'No se pudo conectar a IQ Option (revisá demo/real y access key)'
-      : (err && err.message) || 'Error al iniciar sesión';
-    alert('❌ Error: ' + msg);
+    if (err && err.name === 'AbortError') {
+      showAppToast({
+        kind: 'err',
+        message: 'No se pudo conectar a IQ Option. Revisá demo/real y tu access key.'
+      });
+    } else {
+      showAppToast({
+        kind: 'err',
+        message: 'Algo falló al conectar. Probá de nuevo en unos segundos.'
+      });
+    }
   } finally {
     clearTimeout(abortTimer);
     connectBtn.disabled = false;
@@ -3033,5 +3128,6 @@ fetch('/pago_info').then(r => r.json()).then(d => {
 }).catch(() => {});
 
 </script>
+<div class="sb-toast-host" id="sbToastHost" aria-live="polite"></div>
 </body>
 </html>
